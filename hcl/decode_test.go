@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/chronicleprotocol/oracle-suite/pkg/util/ptrutil"
+	"github.com/chronicleprotocol/suite/pkg/util/ptrutil"
 )
 
 func TestDecode(t *testing.T) {
