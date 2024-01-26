@@ -109,6 +109,21 @@ func Intersect[T comparable](slices ...[]T) []T {
 	return out
 }
 
+// Unique returns a new slice with the unique elements of all slices.
+func Unique[T comparable](slices ...[]T) []T {
+	seen := make(map[T]bool)
+	out := make([]T, 0)
+	for _, s := range slices {
+		for _, x := range s {
+			if !seen[x] {
+				seen[x] = true
+				out = append(out, x)
+			}
+		}
+	}
+	return out
+}
+
 // IndexOf returns the index of the first occurrence of e in s, or -1 if e is
 // not present in s.
 func IndexOf[T comparable](s []T, e T) int {
