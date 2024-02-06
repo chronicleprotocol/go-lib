@@ -63,14 +63,14 @@ func ParseFile(path string, subject *hcl.Range) (hcl.Body, hcl.Diagnostics) {
 
 // ParseSources parses the HCL configuration sources. It returns a merged
 // hcl.Body.
-func ParseSources(srcs [][]byte) (hcl.Body, hcl.Diagnostics) {
-	bodies := make([]hcl.Body, len(srcs))
-	for n := 0; n < len(srcs); n++ {
-		body, diags := ParseSource(fmt.Sprintf("embeded #%d", n), srcs[n])
+func ParseSources(srcs map[string][]byte) (hcl.Body, hcl.Diagnostics) {
+	bodies := make([]hcl.Body, 0, len(srcs))
+	for k, v := range srcs {
+		body, diags := ParseSource(fmt.Sprintf("embeded config (%s)", k), v)
 		if diags.HasErrors() {
 			return nil, diags
 		}
-		bodies[n] = body
+		bodies = append(bodies, body)
 	}
 	return hcl.MergeBodies(bodies), nil
 }
