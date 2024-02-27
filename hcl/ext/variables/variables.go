@@ -310,7 +310,6 @@ func (r *variableResolver) traverse(
 	expr hcl.Expression,
 	fn func(ctx *hcl.EvalContext, path []cty.Value, expr hcl.Expression) (bool, hcl.Diagnostics),
 ) hcl.Diagnostics {
-
 	var diags hcl.Diagnostics
 	switch exprType := expr.(type) {
 	case exprMap:

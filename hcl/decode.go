@@ -196,7 +196,7 @@ func decodeSingleBlock(ctx *hcl.EvalContext, block *hcl.Block, ptrVal reflect.Va
 					Severity: hcl.DiagError,
 					Summary:  "Decode error",
 					Detail:   fmt.Sprintf("Extraneous block %q, only one is allowed", field.Name),
-					Subject:  &block.DefRange,
+					Subject:  &block.DefRange, //nolint:nolintlint,gosec
 				})
 			}
 			return diags
