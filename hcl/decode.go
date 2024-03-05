@@ -475,18 +475,6 @@ func getStructFieldMeta(field reflect.StructField) (structFieldMeta, hcl.Diagnos
 		return sfm, nil
 	}
 
-	// Tagged fields must be exported.
-	if !field.IsExported() {
-		return sfm, hcl.Diagnostics{{
-			Severity: hcl.DiagError,
-			Summary:  "Schema error",
-			Detail: fmt.Sprintf(
-				"Field %q is not exported but has an hcl tag",
-				field.Name,
-			),
-		}}
-	}
-
 	parts := strings.Split(tag, ",")
 	sfm.Name = parts[0]
 	if len(sfm.Name) == 0 {
@@ -521,6 +509,18 @@ func getStructFieldMeta(field reflect.StructField) (structFieldMeta, hcl.Diagnos
 				Detail:   fmt.Sprintf("Invalid tag %q", part),
 			}}
 		}
+	}
+
+	// Tagged fields must be exported.
+	if !field.IsExported() && !sfm.Ignore {
+		return sfm, hcl.Diagnostics{{
+			Severity: hcl.DiagError,
+			Summary:  "Schema error",
+			Detail: fmt.Sprintf(
+				"Field %q is not exported but has an hcl tag",
+				field.Name,
+			),
+		}}
 	}
 
 	// Find a struct type for this block.
