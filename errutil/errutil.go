@@ -68,6 +68,11 @@ func (m MultiError) Error() string {
 	return b.String()
 }
 
+// Unwrap unwraps all errors.
+func (m MultiError) Unwrap() []error {
+	return m
+}
+
 // Ignore is a helper function that returns the first argument and ignores the
 // error.
 func Ignore[T any](v T, _ error) T {

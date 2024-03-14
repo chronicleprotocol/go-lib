@@ -1,3 +1,3 @@
 include = [
-  "./subdir/included.hcl"
+  "subdir/included.hcl",
 ]

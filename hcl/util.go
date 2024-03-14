@@ -15,7 +15,9 @@
 
 package hcl
 
-import "reflect"
+import (
+	"reflect"
+)
 
 // derefType dereferences the given type until it is not a pointer or an
 // interface.

@@ -16,6 +16,7 @@
 package include
 
 import (
+	"os"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -25,7 +26,7 @@ import (
 	utilHCL "github.com/chronicleprotocol/suite/pkg/util/hcl"
 )
 
-func TestVariables(t *testing.T) {
+func TestInclude(t *testing.T) {
 	tests := []struct {
 		filename    string
 		asserts     func(t *testing.T, body hcl.Body)
@@ -45,7 +46,13 @@ func TestVariables(t *testing.T) {
 			asserts: func(t *testing.T, body hcl.Body) {
 				attrs, diags := body.JustAttributes()
 				require.False(t, diags.HasErrors(), diags.Error())
-				assert.NotNil(t, attrs["foo"])
+				require.NotNil(t, attrs["foo"])
+				value, _ := attrs["foo"].Expr.Value(nil)
+				assert.Equal(t, "baz", value.AsString())
+
+				require.NotNil(t, attrs["level"])
+				val2, _ := attrs["level"].Expr.Value(nil)
+				assert.Equal(t, "2", val2.AsString())
 			},
 		},
 		{
@@ -59,7 +66,7 @@ func TestVariables(t *testing.T) {
 			require.False(t, diags.HasErrors(), diags.Error())
 
 			hclCtx := &hcl.EvalContext{}
-			body, diags = Include(hclCtx, body, "./testdata", 2)
+			body, diags = Include(hclCtx, os.DirFS("testdata"), body, 2)
 			if tt.expectedErr != "" {
 				require.True(t, diags.HasErrors(), diags.Error())
 				assert.Contains(t, diags.Error(), tt.expectedErr)
@@ -70,7 +77,7 @@ func TestVariables(t *testing.T) {
 
 				// The "include" attribute should be removed from the body.
 				emptySchema := &hcl.BodySchema{
-					Attributes: []hcl.AttributeSchema{{Name: "foo"}, {Name: "bar"}},
+					Attributes: []hcl.AttributeSchema{{Name: "foo"}, {Name: "bar"}, {Name: "level"}},
 				}
 				_, diags = body.Content(emptySchema)
 				require.False(t, diags.HasErrors(), diags.Error())

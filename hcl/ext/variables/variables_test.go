@@ -40,7 +40,7 @@ func TestVariables(t *testing.T) {
 		},
 		{
 			filename:    "./testdata/circular-reference.hcl",
-			expectedErr: `./testdata/circular-reference.hcl:3,9-16: Circular reference detected`, // Location and filename must be reported.
+			expectedErr: `circular-reference.hcl:3,9-16: Circular reference detected`, // Location and filename must be reported.
 		},
 		{
 			filename:     "./testdata/empty.hcl",
