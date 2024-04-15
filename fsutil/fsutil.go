@@ -1,141 +1,59 @@
-//  Copyright (C) 2021-2023 Chronicle Labs, Inc.
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU Affero General Public License as
-//  published by the Free Software Foundation, either version 3 of the
-//  License, or (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU Affero General Public License for more details.
-//
-//  You should have received a copy of the GNU Affero General Public License
-//  along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 package fsutil
 
 import (
+	"bytes"
+	"errors"
 	"io/fs"
-
-	"github.com/chronicleprotocol/suite/pkg/util/errutil"
+	"time"
 )
 
-// NewChainFS returns a new FS that combines multiple FS into one.
-//
-// The FS returned by NewChainFS will use given FS in the order they are
-// provided.
-func NewChainFS(fs ...fs.FS) fs.FS {
-	return &chainFS{fs: fs}
+//TODO: Add content hash verification with a provided hash `func (content []byte,hash types.Hash) (bool)`
+
+type fileInfo struct {
+	name    string
+	size    int64
+	mode    fs.FileMode
+	modTime time.Time
+	isDir   bool
+	sys     interface{}
 }
 
-type chainFS struct{ fs []fs.FS }
+func (i *fileInfo) Name() string       { return i.name }
+func (i *fileInfo) Size() int64        { return i.size }
+func (i *fileInfo) Mode() fs.FileMode  { return i.mode }
+func (i *fileInfo) ModTime() time.Time { return i.modTime }
+func (i *fileInfo) IsDir() bool        { return i.isDir }
+func (i *fileInfo) Sys() interface{}   { return i.sys }
 
-// Open implements the fs.FS interface.
-//
-// It opens the named file from the first FS that returns a non-nil result.
-//
-// Otherwise, it returns an error that combines all errors from all FS.
-func (c *chainFS) Open(name string) (fs.File, error) {
-	var err error
-	for _, f := range c.fs {
-		fsFile, fsErr := f.Open(name)
-		if fsErr != nil {
-			err = errutil.Append(err, fsErr)
-			continue
-		}
-		return fsFile, nil
-	}
-	return nil, err
+type file struct {
+	reader *bytes.Reader
+	info   fs.FileInfo
 }
 
-// Glob implements the fs.GlobFS interface.
-//
-// It returns the names of all files matching pattern or nil if there is no
-// matching file.
-//
-// If any FS returns an error, the error is returned immediately.
-func (c *chainFS) Glob(pattern string) (paths []string, err error) {
-	for _, f := range c.fs {
-		fsPaths, fsErr := fs.Glob(f, pattern)
-		if fsErr != nil {
-			return nil, fsErr
-		}
-		paths = append(paths, fsPaths...)
-	}
-	return paths, nil
+func (f *file) Stat() (fs.FileInfo, error)       { return f.info, nil }
+func (f *file) Read(p []byte) (n int, err error) { return f.reader.Read(p) }
+func (f *file) Close() error                     { return nil }
+func (f *file) ReadDir(n int) ([]fs.DirEntry, error) {
+	return nil, errors.New("directories not supported")
 }
 
-// Stat implements the fs.StatFS interface.
-//
-// It returns the FileInfo for the named file from the first FS that returns a
-// non-nil result.
-//
-// Otherwise, it returns an error that combines all errors from all FS.
-func (c *chainFS) Stat(name string) (fs.FileInfo, error) {
-	var err error
-	for _, f := range c.fs {
-		fsStat, fsErr := fs.Stat(f, name)
-		if fsErr != nil {
-			err = errutil.Append(err, fsErr)
-			continue
-		}
-		return fsStat, nil
+// open
+// Contrary to fs package, the downloading FS is mainly based on the ReadFile method.
+// The Open function is not used in the downloading FS but is supported and is calling ReadFile method.
+func open(f fs.FS, name string) (fs.File, error) {
+	content, err := fs.ReadFile(f, name)
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
-}
-
-// ReadFile implements the fs.ReadFileFS interface.
-//
-// It reads the named file from the first FS that returns a non-nil result.
-//
-// Otherwise, it returns an error that combines all errors from all FS.
-func (c *chainFS) ReadFile(name string) ([]byte, error) {
-	var err error
-	for _, f := range c.fs {
-		fsData, fsErr := fs.ReadFile(f, name)
-		if fsErr != nil {
-			err = errutil.Append(err, fsErr)
-			continue
-		}
-		return fsData, nil
-	}
-	return nil, err
-}
-
-// ReadDir implements the fs.ReadDirFS interface.
-//
-// It reads the named directory from the first FS that returns a non-nil result.
-//
-// Otherwise, it returns an error that combines all errors from all FS.
-func (c *chainFS) ReadDir(name string) ([]fs.DirEntry, error) {
-	var err error
-	for _, f := range c.fs {
-		fsDir, fsErr := fs.ReadDir(f, name)
-		if fsErr != nil {
-			err = errutil.Append(err, fsErr)
-			continue
-		}
-		return fsDir, nil
-	}
-	return nil, err
-}
-
-// Sub implements the fs.SubFS interface.
-//
-// It returns a new FS that represents the named directory from the first FS
-// that returns a non-nil result.
-//
-// Otherwise, it returns an error that combines all errors from all FS.
-func (c *chainFS) Sub(dir string) (fs.FS, error) {
-	var err error
-	for _, f := range c.fs {
-		fsSub, fsErr := fs.Sub(f, dir)
-		if fsErr != nil {
-			err = errutil.Append(err, fsErr)
-			continue
-		}
-		return fsSub, nil
-	}
-	return nil, err
+	return &file{
+		reader: bytes.NewReader(content),
+		info: &fileInfo{
+			name:    name,
+			size:    int64(len(content)),
+			mode:    0,
+			modTime: time.Now(),
+			isDir:   false,
+			sys:     nil,
+		},
+	}, nil
 }
