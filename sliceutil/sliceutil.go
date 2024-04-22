@@ -52,6 +52,19 @@ func Map[T, U any](s []T, f func(T) U) []U {
 	return out
 }
 
+// MapErr returns a new slice with the results of applying the function f to each
+// element of the original slice and fails when applying the function to eny of the elements fails.
+func MapErr[T, U any](s []T, f func(T) (U, error)) (r []U, err error) {
+	out := make([]U, len(s))
+	for i, x := range s {
+		out[i], err = f(x)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 // Filter returns a new slice with the elements of the original slice that
 // satisfy the predicate f.
 func Filter[T any](s []T, f func(T) bool) []T {

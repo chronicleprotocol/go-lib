@@ -9,26 +9,21 @@ import (
 type ProtoFSItem struct {
 	Scheme string
 	FS     fs.FS
-	NameFn func(url.URL) string
 }
 
-func NewProtoFS(items ...ProtoFSItem) fs.FS {
+func NewProtoFS(items ...ProtoFSItem) (fs.FS, error) {
 	f := make(protoFS, len(items))
 	for _, item := range items {
-		f[item.Scheme] = protoFSItem{
-			fs:   item.FS,
-			name: item.NameFn,
+		if item.FS == nil {
+			return nil, fmt.Errorf("fs is nil for scheme: %s", item.Scheme)
 		}
+		f[item.Scheme] = item.FS
 	}
-	return &f
+	return &f, nil
 }
 
-type protoFSItem struct {
-	fs   fs.FS
-	name func(url.URL) string
-}
-
-type protoFS map[string]protoFSItem
+// protoFS is a map of protocol to fs.FS
+type protoFS map[string]fs.FS
 
 func (f *protoFS) ReadFile(name string) ([]byte, error) {
 	u, err := url.Parse(name)
@@ -39,10 +34,7 @@ func (f *protoFS) ReadFile(name string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported protocol: %s", u.Scheme)
 	}
-	if fsItem.name != nil {
-		return fs.ReadFile(fsItem.fs, fsItem.name(*u))
-	}
-	return fs.ReadFile(fsItem.fs, u.String())
+	return fs.ReadFile(fsItem, name)
 }
 
 func (f *protoFS) Open(name string) (fs.File, error) {

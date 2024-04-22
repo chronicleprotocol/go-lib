@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log"
 	"time"
 )
+
+//TODO: RandomNameFS could be a ChainFS with static shuffled slice of FSes but it would always use same ordering.
 
 func NewRetryFS(ctx context.Context, fs fs.FS, retryCount int, retryDelay time.Duration) fs.FS {
 	return &retryFS{
@@ -26,6 +29,7 @@ type retryFS struct {
 
 func (f *retryFS) ReadFile(name string) ([]byte, error) {
 	for retry := f.retryCount; retry > 0; retry-- {
+		log.Printf("trying to read %q, attempt %d of %d", name, f.retryCount-retry+1, f.retryCount)
 		content, err := fs.ReadFile(f.fs, name)
 		if err != nil {
 			select {

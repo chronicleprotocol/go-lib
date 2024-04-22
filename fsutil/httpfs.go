@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 
 	"github.com/chronicleprotocol/suite/pkg/util/errutil"
@@ -20,6 +21,7 @@ type httpFS struct {
 }
 
 func (f *httpFS) ReadFile(name string) (content []byte, err error) {
+	log.Printf("GET %s", name)
 	httpRequest, err := http.NewRequestWithContext(f.ctx, http.MethodGet, name, nil)
 	if err != nil {
 		return nil, err
