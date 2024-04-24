@@ -46,7 +46,16 @@ func makeGatewaysFromStrings(gateways ...string) ([]*url.URL, error) {
 	if len(gateways) == 0 {
 		return ipfsGateways, nil
 	}
-	return sliceutil.MapErr(gateways, url.Parse)
+	return sliceutil.MapErr(gateways, func(s string) (*url.URL, error) {
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		if u.Host == "" {
+			u = &url.URL{Host: s}
+		}
+		return u, nil
+	})
 }
 
 var ipfsGateways = []*url.URL{
