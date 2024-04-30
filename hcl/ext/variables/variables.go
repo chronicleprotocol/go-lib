@@ -101,10 +101,11 @@ func collectVariables(attrs hcl.Attributes) []*variable {
 		}
 
 		for _, v := range attr.Expr.Variables() {
-			for _, name := range traversal2names(v) {
+			refNames := traversal2names(v)
+			for _, name := range refNames {
 				// if we have self-references, then we need to retry
 				// evaluation of the variable to resolve it.
-				if name == node.Name {
+				if name == node.Name && len(refNames) > 1 {
 					node.Retry++
 					continue
 				}
