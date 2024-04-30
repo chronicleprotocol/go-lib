@@ -51,6 +51,39 @@ func TestVariables(t *testing.T) {
 			expectedVars: (map[string]cty.Value)(nil),
 		},
 		{
+			filename:    "./testdata/undefined.hcl",
+			expectedErr: `undefined.hcl:3,29-33: Unsupported attribute; This object does not have an attribute named "bar"`,
+		},
+		{
+			filename: "./testdata/ordering.hcl",
+			expectedVars: map[string]cty.Value{
+				"a": cty.StringVal("hello world"),
+				"b": cty.StringVal("hello world"),
+				"c": cty.StringVal("hello"),
+				"d": cty.StringVal("world"),
+				"e": cty.StringVal("hello world"),
+
+				"aa": cty.TupleVal([]cty.Value{
+					cty.NumberIntVal(1),
+					cty.NumberIntVal(2),
+					cty.NumberIntVal(3),
+				}),
+				"bb": cty.TupleVal([]cty.Value{
+					cty.NumberIntVal(1),
+					cty.NumberIntVal(2),
+					cty.NumberIntVal(3),
+				}),
+				"bb1": cty.NumberIntVal(1),
+				"bb2": cty.NumberIntVal(2),
+				"bb3": cty.NumberIntVal(3),
+
+				"aaa": cty.ObjectVal(map[string]cty.Value{
+					"bbb": cty.NumberIntVal(4),
+				}),
+				"bbb": cty.NumberIntVal(4),
+			},
+		},
+		{
 			filename: "./testdata/self-reference.hcl",
 			expectedVars: map[string]cty.Value{
 				"word_one": cty.StringVal("hello"),
@@ -142,9 +175,10 @@ func TestVariables(t *testing.T) {
 				return
 			} else {
 				require.False(t, diags.HasErrors(), diags.Error())
-				vars := map[string]cty.Value{}
-				if !hclCtx.Variables["var"].IsNull() {
-					vars = hclCtx.Variables["var"].AsValueMap()
+				object := hclCtx.Variables[varObjectName]
+				vars := make(map[string]cty.Value)
+				if !object.IsNull() {
+					vars = object.AsValueMap()
 				}
 				for k, v := range tt.expectedVars {
 					assert.True(t, vars[k].RawEquals(v), "%s: expected %s to equal %s", k, vars[k].GoString(), v.GoString())
