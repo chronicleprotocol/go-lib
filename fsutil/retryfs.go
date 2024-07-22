@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"time"
 )
 
@@ -29,7 +28,6 @@ type retryFS struct {
 
 func (f *retryFS) ReadFile(name string) ([]byte, error) {
 	for retry := f.retryCount; retry > 0; retry-- {
-		log.Printf("trying to read %q, attempt %d of %d", name, f.retryCount-retry+1, f.retryCount)
 		content, err := fs.ReadFile(f.fs, name)
 		if err != nil {
 			select {
