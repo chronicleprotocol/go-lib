@@ -15,13 +15,17 @@
 
 package errutil
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
 
 // Append combines the provided error with a list of errors.
 func Append(err error, errs ...error) error {
 	if err == nil && len(errs) == 0 {
 		return nil
 	}
+	// Using type casting instead of errors.As is intentional.
 	var mErr MultiError
 	if e, ok := err.(MultiError); ok {
 		mErr = e
@@ -87,4 +91,12 @@ func Must[T any](v T, err error) T {
 		panic(err)
 	}
 	return v
+}
+
+// As is a helper function that attempts to extract a target type from the error
+// and returns it. It returns false if the error does not contain the target
+// type.
+func As[T error](err error) (target T, ok bool) {
+	ok = errors.As(err, &target)
+	return
 }

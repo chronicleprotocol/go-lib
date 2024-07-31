@@ -143,3 +143,33 @@ func TestMust(t *testing.T) {
 		})
 	}
 }
+
+func TestAs(t *testing.T) {
+	t.Run("error contains target type", func(t *testing.T) {
+		err := fmt.Errorf("wrapped error: %w", testErr{})
+		if err, ok := As[testErr](err); ok {
+			assert.True(t, ok)
+			assert.Equal(t, "test error", err.Error())
+			return
+		}
+		assert.Fail(t, "error should contain target type")
+	})
+	t.Run("error contains target type - pointer", func(t *testing.T) {
+		err := fmt.Errorf("wrapped error: %w", &testErr{})
+		if err, ok := As[*testErr](err); ok {
+			assert.True(t, ok)
+			assert.Equal(t, "test error", err.Error())
+			return
+		}
+		assert.Fail(t, "error should contain target type")
+	})
+	t.Run("error does not contain target type", func(t *testing.T) {
+		err := fmt.Errorf("error")
+		_, ok := As[testErr](err)
+		assert.False(t, ok)
+	})
+}
+
+type testErr struct{}
+
+func (e testErr) Error() string { return "test error" }
