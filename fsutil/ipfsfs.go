@@ -19,7 +19,7 @@ func RandIpfsGatewayFn(gateways ...string) (func(url.URL) string, error) {
 		return nil, err
 	}
 	n := len(gwList)
-	rand.Seed(uint64(time.Now().UnixNano()))
+	rand.Seed(uint64(time.Now().UnixNano())) //nolint:gosec // disable G115
 	return func(u url.URL) string {
 		gw := gwList[rand.Intn(n)]
 
