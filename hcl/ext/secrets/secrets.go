@@ -31,7 +31,7 @@ const (
 //	  key "default" {
 //	    address = "0x123...abc"
 //		   keystore_path = "/path/to/keystore"
-//		   pssphrase_file = "/path/to/passwords"
+//		   passphrase_file = "/path/to/passwords"
 //	  }
 //	}
 //
@@ -45,7 +45,7 @@ const (
 //
 // decrypted = secrets.foo
 //
-// In this example gecrypted will be equal to the decrypted value of "0x234...bcd"
+// In this example decrypted will be equal to the decrypted value of "0x234...bcd"
 //
 // NOTE: if there is no secret value for configured ethereum public key, then
 // secrets.foo will return a hcl.Diagnostics that value is not set.
@@ -172,14 +172,6 @@ func findKey(ctx *hcl.EvalContext, body hcl.Body) (*wallet.PrivateKey, hcl.Diagn
 	if diags.HasErrors() {
 		return nil, diags
 	}
-	if passphraseFile == "" {
-		return nil, hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "missing etehreum.passphrase_file attribute",
-			EvalContext: ctx,
-			Subject:     content.Blocks[0].DefRange.Ptr(),
-		}}
-	}
 
 	key, err := readAccountKey(keystoreDir, passphraseFile, addr)
 	if err != nil {
@@ -242,6 +234,9 @@ func readStringAttr(ctx *hcl.EvalContext, attrs hcl.Attributes, key string) (str
 }
 
 func readPassphrase(passFile string) (string, error) {
+	if passFile == "" {
+		return "", nil
+	}
 	b, err := os.ReadFile(passFile)
 	if err != nil {
 		return "", fmt.Errorf("failed to read passphrase file: %w", err)
@@ -249,16 +244,16 @@ func readPassphrase(passFile string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
-func readAccountKey(keysotoreDir string, passFile string, address types.Address) (*wallet.PrivateKey, error) {
+func readAccountKey(keystoreDir string, passFile string, address types.Address) (*wallet.PrivateKey, error) {
 	passphrase, err := readPassphrase(passFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read passphrase file: %w", err)
 	}
-	key, err := wallet.NewKeyFromDirectory(keysotoreDir, passphrase, address)
+	key, err := wallet.NewKeyFromDirectory(keystoreDir, passphrase, address)
 	if err == nil {
 		return key, nil
 	}
-	return wallet.NewKeyFromJSONContent([]byte(keysotoreDir), passFile)
+	return wallet.NewKeyFromJSONContent([]byte(keystoreDir), passFile)
 }
 
 func decryptVariables(ctx *hcl.EvalContext, key *wallet.PrivateKey, attrs hcl.Attributes) (map[string]cty.Value, hcl.Diagnostics) {
