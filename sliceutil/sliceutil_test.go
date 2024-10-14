@@ -84,4 +84,6 @@ func TestAppendUnique(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, AppendUnique([]string{"a", "b"}, "c"))
 	assert.Equal(t, []string{"a", "b", "c"}, AppendUnique([]string{"a", "b", "c"}, "c"))
 	assert.Equal(t, []string{"a", "b", "c", "d"}, AppendUnique([]string{"a", "b", "c"}, "d"))
+	assert.Equal(t, []string{"a", "b", "c", "d"}, AppendUnique([]string{"a", "b", "c"}, "c", "d"))
+	assert.Equal(t, []string{"a", "b", "c", "d", "e"}, AppendUnique([]string{"a", "b", "c"}, "d", "e"))
 }

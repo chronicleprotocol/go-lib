@@ -149,9 +149,12 @@ func IndexOf[T comparable](s []T, e T) int {
 }
 
 // AppendUnique appends e to s if e is not already present in s.
-func AppendUnique[T comparable](s []T, e T) []T {
-	if Contains(s, e) {
-		return s
+func AppendUnique[T comparable](s []T, ee ...T) []T {
+	for _, e := range ee {
+		if Contains(s, e) {
+			continue
+		}
+		s = append(s, e)
 	}
-	return append(s, e)
+	return s
 }
