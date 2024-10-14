@@ -17,6 +17,8 @@ package secrets
 
 import (
 	"errors"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -35,6 +37,7 @@ const (
 func TestVariables(t *testing.T) {
 	tt := []struct {
 		filename        string
+		skipDecrypt     bool
 		expectedErr     string
 		expectedSecrets map[string]cty.Value
 	}{
@@ -42,6 +45,13 @@ func TestVariables(t *testing.T) {
 			filename: "./testdata/valid.hcl",
 			expectedSecrets: map[string]cty.Value{
 				"foo": cty.StringVal("hello world\n"),
+			},
+		},
+		{
+			filename:    "./testdata/valid-skip-decrypt.hcl",
+			skipDecrypt: true,
+			expectedSecrets: map[string]cty.Value{
+				"foo": cty.StringVal("<encrypted>"),
 			},
 		},
 		{
@@ -69,8 +79,16 @@ func TestVariables(t *testing.T) {
 			expectedErr: "Duplicate secret value",
 		},
 	}
+
+	prev := os.Getenv(skipDecryptEnv)
+	os.Setenv(skipDecryptEnv, "true")
+	t.Cleanup(func() {
+		os.Setenv(skipDecryptEnv, prev)
+	})
 	for _, tc := range tt {
 		t.Run(tc.filename, func(t *testing.T) {
+			os.Setenv(skipDecryptEnv, strconv.FormatBool(tc.skipDecrypt))
+
 			body, diags := utilHCL.ParseFile(tc.filename, nil)
 			require.False(t, diags.HasErrors(), diags.Error())
 

@@ -3,6 +3,7 @@ package secrets
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/defiweb/go-eth/types"
@@ -22,6 +23,8 @@ const (
 
 	varName          = "secrets"
 	secretsBlockName = "secrets"
+
+	skipDecryptEnv = "XXX_SECRETS_SKIP_DECRYPT"
 )
 
 // DecryptSecrets decrypts secrets in the given HCL body.
@@ -47,6 +50,11 @@ const (
 //
 // In this example decrypted will be equal to the decrypted value of "0x234...bcd"
 //
+// NOTE: To use in test scripts, there is an env variable XXX_SECRETS_SKIP_DECRYPT
+// which allow to skip decryption and just check that secret is set set.
+// If XXX_SECRETS_SKIP_DECRYPT is set to true, then actual decryption step will be
+// skipped and secret value will be replaced with just "<encrypted>".
+//
 // NOTE: if there is no secret value for configured ethereum public key, then
 // secrets.foo will return a hcl.Diagnostics that value is not set.
 func DecryptSecrets(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagnostics) {
@@ -62,7 +70,8 @@ func DecryptSecrets(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagnost
 		return remain, nil
 	}
 
-	key, diags := findKey(ctx, body)
+	skipDecrypt, _ := strconv.ParseBool(os.Getenv(skipDecryptEnv))
+	addr, key, diags := findEthereumKey(ctx, body, skipDecrypt)
 	if diags.HasErrors() {
 		return nil, diags
 	}
@@ -77,7 +86,7 @@ func DecryptSecrets(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagnost
 			continue
 		}
 
-		bsecrets, diags := decryptVariables(ctx, key, attrs)
+		bsecrets, diags := decryptVariables(ctx, addr, key, attrs, skipDecrypt)
 		if diags.HasErrors() {
 			return nil, diags
 		}
@@ -102,89 +111,40 @@ func DecryptSecrets(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagnost
 	return remain, nil
 }
 
-func findKey(ctx *hcl.EvalContext, body hcl.Body) (*wallet.PrivateKey, hcl.Diagnostics) {
-	parent, diags := findEthereumBlock(ctx, body)
+func findEthereumKey(
+	ctx *hcl.EvalContext,
+	body hcl.Body,
+	skipDecrypt bool,
+) (
+	addr types.Address,
+	key *wallet.PrivateKey,
+	diags hcl.Diagnostics,
+) {
+	ethereum, diags := findEthereumBlock(ctx, body)
 	if diags.HasErrors() {
-		return nil, diags
+		return addr, nil, diags
 	}
 
-	content, _, diags := parent.PartialContent(&hcl.BodySchema{
+	keys, _, diags := ethereum.PartialContent(&hcl.BodySchema{
 		Blocks: []hcl.BlockHeaderSchema{{
 			Type:       keyBlockName,
 			LabelNames: []string{keyBlockLabel},
 		}},
 	})
 	if diags.HasErrors() {
-		return nil, diags
+		return addr, nil, diags
 	}
 
-	if len(content.Blocks) == 0 {
-		return nil, hcl.Diagnostics{{
+	if len(keys.Blocks) == 0 {
+		return addr, nil, hcl.Diagnostics{{
 			Severity:    hcl.DiagError,
 			Summary:     "There is no ethereum.key[default] blocks in config",
-			Detail:      "Can not determine which ethereum key to use",
+			Detail:      "can not determine which ethereum key to use",
 			EvalContext: ctx,
 		}}
 	}
 
-	attrs, diags := content.Blocks[0].Body.JustAttributes()
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	saddr, diags := readStringAttr(ctx, attrs, "address")
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	if saddr == "" {
-		return nil, hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "missing etehreum.key[default] address attribute",
-			EvalContext: ctx,
-			Subject:     content.Blocks[0].DefRange.Ptr(),
-		}}
-	}
-	addr, err := types.AddressFromHex(saddr)
-	if err != nil {
-		return nil, hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "marlformed etehreum.key[default].address attribute",
-			Detail:      err.Error(),
-			EvalContext: ctx,
-			Subject:     content.Blocks[0].DefRange.Ptr(),
-		}}
-	}
-
-	keystoreDir, diags := readStringAttr(ctx, attrs, "keystore_path")
-	if diags.HasErrors() {
-		return nil, diags
-	}
-	if keystoreDir == "" {
-		return nil, hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "missing etehreum.keystore_path attribute",
-			EvalContext: ctx,
-			Subject:     content.Blocks[0].DefRange.Ptr(),
-		}}
-	}
-
-	passphraseFile, diags := readStringAttr(ctx, attrs, "passphrase_file")
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
-	key, err := readAccountKey(keystoreDir, passphraseFile, addr)
-	if err != nil {
-		return nil, hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "failed to read ethereum key from keystore",
-			Detail:      err.Error(),
-			EvalContext: ctx,
-			Subject:     content.Blocks[0].DefRange.Ptr(),
-		}}
-	}
-
-	return key, nil
+	return loadEthereumKey(ctx, keys.Blocks[0], skipDecrypt)
 }
 
 func findEthereumBlock(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagnostics) {
@@ -206,61 +166,174 @@ func findEthereumBlock(ctx *hcl.EvalContext, body hcl.Body) (hcl.Body, hcl.Diagn
 	return dynblock.Expand(ethereum.Blocks[0].Body, ctx), nil
 }
 
-func readStringAttr(ctx *hcl.EvalContext, attrs hcl.Attributes, key string) (string, hcl.Diagnostics) {
-	attr := attrs[key]
-	if attr == nil {
-		return "", nil
+func loadEthereumKey(ctx *hcl.EvalContext, block *hcl.Block, skipDecrypt bool) (addr types.Address, key *wallet.PrivateKey, diags hcl.Diagnostics) {
+	attrs, diags := block.Body.JustAttributes()
+	if diags.HasErrors() {
+		return addr, nil, diags
 	}
-	val, err := attr.Expr.Value(ctx)
+	loader := &ethereumBlockLoader{block: block, attrs: attrs}
+
+	addr, diags = loader.loadAddress(ctx, "address")
+	if diags.HasErrors() {
+		return addr, nil, diags
+	}
+
+	if skipDecrypt {
+		return addr, nil, nil
+	}
+
+	keystore, diags := loader.loadKeystore(ctx, "keystore_path")
+	if diags.HasErrors() {
+		return addr, nil, diags
+	}
+	passphrase, diags := loader.loadPassphrase(ctx, "passphrase_file")
+	if diags.HasErrors() {
+		return addr, nil, diags
+	}
+
+	var err error
+	if len(keystore) > 2 && (keystore[0] == '{' && keystore[len(keystore)-1] == '}') {
+		key, err = wallet.NewKeyFromJSONContent([]byte(keystore), passphrase)
+	} else {
+		key, err = wallet.NewKeyFromDirectory(keystore, passphrase, addr)
+	}
 	if err != nil {
-		return "", hcl.Diagnostics{{
+		return addr, nil, hcl.Diagnostics{{
 			Severity:    hcl.DiagError,
-			Summary:     "Failed to evaluate attribute extression",
+			Summary:     "failed to read ethereum key from keystore",
 			Detail:      err.Error(),
 			EvalContext: ctx,
-			Subject:     attr.Range.Ptr(),
+			Subject:     block.DefRange.Ptr(),
 		}}
 	}
-	if val.Type() != cty.String {
-		return "", hcl.Diagnostics{{
-			Severity:    hcl.DiagError,
-			Summary:     "Invalid attribute type",
-			Detail:      fmt.Sprintf("Expected string, got %s", val.Type().FriendlyName()),
-			EvalContext: ctx,
-			Subject:     attr.Range.Ptr(),
-		}}
-	}
-	return val.AsString(), nil
+	return addr, key, nil
 }
 
-func readPassphrase(passFile string) (string, error) {
-	if passFile == "" {
-		return "", nil
+type ethereumBlockLoader struct {
+	block *hcl.Block
+	attrs hcl.Attributes
+}
+
+func (l *ethereumBlockLoader) loadAddress(ctx *hcl.EvalContext, attrName string) (addr types.Address, diags hcl.Diagnostics) {
+	attr := l.attrs[attrName]
+	if attr == nil {
+		return addr, hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     l.block.DefRange.Ptr(),
+			Summary:     "Missing key." + attrName + " attribute",
+			EvalContext: ctx,
+		}}
 	}
-	b, err := os.ReadFile(passFile)
+
+	s, err := asString(ctx, attr)
 	if err != nil {
-		return "", fmt.Errorf("failed to read passphrase file: %w", err)
+		return addr, hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     attr.Range.Ptr(),
+			Summary:     "Failed to get key." + attrName + " attribute value",
+			Detail:      err.Error(),
+			EvalContext: ctx,
+		}}
+	}
+
+	addr, err = types.AddressFromHex(s)
+	if err != nil {
+		return addr, hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     attr.Range.Ptr(),
+			Summary:     "Malformed ethereum address in key." + attrName + " attribute value",
+			Detail:      err.Error(),
+			EvalContext: ctx,
+		}}
+	}
+
+	return addr, nil
+}
+
+func (l *ethereumBlockLoader) loadKeystore(ctx *hcl.EvalContext, attrName string) (string, hcl.Diagnostics) {
+	attr := l.attrs[attrName]
+	if attr == nil {
+		return "", hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     l.block.DefRange.Ptr(),
+			Summary:     "Missing key." + attrName + " attribute",
+			EvalContext: ctx,
+		}}
+	}
+
+	s, err := asString(ctx, attr)
+	if err != nil {
+		return "", hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     attr.Range.Ptr(),
+			Summary:     "Failed to get key." + attrName + " attribute value",
+			Detail:      err.Error(),
+			EvalContext: ctx,
+		}}
+	}
+	return s, nil
+}
+
+func (l *ethereumBlockLoader) loadPassphrase(ctx *hcl.EvalContext, attrName string) (string, hcl.Diagnostics) {
+	attr := l.attrs[attrName]
+	if attr == nil {
+		return "", hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     l.block.DefRange.Ptr(),
+			Summary:     "Missing key." + attrName + " attribute",
+			EvalContext: ctx,
+		}}
+	}
+
+	path, err := asString(ctx, attr)
+	if err != nil {
+		return "", hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     attr.Range.Ptr(),
+			Summary:     "Failed to get key." + attrName + " attribute value",
+			Detail:      err.Error(),
+			EvalContext: ctx,
+		}}
+	}
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", hcl.Diagnostics{{
+			Severity:    hcl.DiagError,
+			Subject:     attr.Range.Ptr(),
+			Summary:     "Failed to read pathphrase from key." + attrName + " attribute value",
+			Detail:      err.Error(),
+			EvalContext: ctx,
+		}}
 	}
 	return strings.TrimSpace(string(b)), nil
 }
 
-func readAccountKey(keystoreDir string, passFile string, address types.Address) (*wallet.PrivateKey, error) {
-	passphrase, err := readPassphrase(passFile)
+func asString(ctx *hcl.EvalContext, attr *hcl.Attribute) (string, error) {
+	val, err := attr.Expr.Value(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read passphrase file: %w", err)
+		return "", err
 	}
-	key, err := wallet.NewKeyFromDirectory(keystoreDir, passphrase, address)
-	if err == nil {
-		return key, nil
+	if val.Type() != cty.String {
+		return "", fmt.Errorf("wrong attribute value type: expected string, got %s", val.Type().FriendlyName())
 	}
-	return wallet.NewKeyFromJSONContent([]byte(keystoreDir), passFile)
+	return val.AsString(), nil
 }
 
-func decryptVariables(ctx *hcl.EvalContext, key *wallet.PrivateKey, attrs hcl.Attributes) (map[string]cty.Value, hcl.Diagnostics) {
+func decryptVariables(
+	ctx *hcl.EvalContext,
+	addr types.Address,
+	key *wallet.PrivateKey,
+	attrs hcl.Attributes,
+	skipDecrypt bool,
+) (map[string]cty.Value, hcl.Diagnostics) {
 	m := make(map[string]cty.Value)
-	ownAddr := cty.StringVal(strings.ToLower(key.Address().String()))
-	keyBytes := crypto.FromECDSA(key.PrivateKey())
-	privateKey := ecies.NewPrivateKeyFromBytes(keyBytes)
+	ownAddr := cty.StringVal(strings.ToLower(addr.String()))
+	var privateKey *ecies.PrivateKey
+	if !skipDecrypt {
+		keyBytes := crypto.FromECDSA(key.PrivateKey())
+		privateKey = ecies.NewPrivateKeyFromBytes(keyBytes)
+	}
 
 	for name, attr := range attrs {
 		value, diags := attr.Expr.Value(ctx)
@@ -293,6 +366,11 @@ func decryptVariables(ctx *hcl.EvalContext, key *wallet.PrivateKey, attrs hcl.At
 				Subject:     attr.Range.Ptr(),
 				EvalContext: ctx,
 			}}
+		}
+
+		if skipDecrypt {
+			m[name] = cty.StringVal("<encrypted>")
+			continue
 		}
 
 		b, err := hexutil.Decode(ciphertext.AsString())
