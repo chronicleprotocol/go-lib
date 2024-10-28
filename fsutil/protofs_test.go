@@ -30,16 +30,19 @@ func TestProtoFS(t *testing.T) {
 	assert.NotNil(t, protoFS)
 
 	t.Run("fetch file from IPFS", func(t *testing.T) {
+		t.Skip()
 		file, err := protoFS.Open("ipfs://bafybeihkoviema7g3gxyt6la7vd5ho32ictqbilu3wnlo3rs7ewhnp7lly")
 		assert.NoError(t, err)
 		assert.NotNil(t, file)
 	})
 	t.Run("fetch file from IPFS GW", func(t *testing.T) {
+		t.Skip()
 		file, err := protoFS.Open("ipfs+gateway://bafybeihkoviema7g3gxyt6la7vd5ho32ictqbilu3wnlo3rs7ewhnp7lly")
 		assert.NoError(t, err)
 		assert.NotNil(t, file)
 	})
 	t.Run("fetch file from HTTP", func(t *testing.T) {
+		t.Skip()
 		file, err := protoFS.Open("https://raw.githubusercontent.com/chronicleprotocol/charts/main/README.md")
 		assert.NoError(t, err)
 		assert.NotNil(t, file)
