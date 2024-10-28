@@ -6,11 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/chronicleprotocol/ecies"
+	"github.com/defiweb/go-eth/hexutil"
 	"github.com/defiweb/go-eth/types"
 	"github.com/defiweb/go-eth/wallet"
-	ecies "github.com/ecies/go/v2"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/ext/dynblock"
 	"github.com/zclconf/go-cty/cty"
@@ -331,8 +330,12 @@ func decryptVariables(
 	ownAddr := cty.StringVal(strings.ToLower(addr.String()))
 	var privateKey *ecies.PrivateKey
 	if !skipDecrypt {
-		keyBytes := crypto.FromECDSA(key.PrivateKey())
-		privateKey = ecies.NewPrivateKeyFromBytes(keyBytes)
+		// keyBytes := crypto.FromECDSA(key.PrivateKey())
+		pk, _ := ecies.GenerateKey()
+		pk.PublicKey.X = key.PublicKey().X
+		pk.PublicKey.Y = key.PublicKey().Y
+		pk.D = key.PrivateKey().D
+		privateKey = pk
 	}
 
 	for name, attr := range attrs {
@@ -373,7 +376,7 @@ func decryptVariables(
 			continue
 		}
 
-		b, err := hexutil.Decode(ciphertext.AsString())
+		b, err := hexutil.HexToBytes(ciphertext.AsString())
 		if err != nil {
 			return nil, hcl.Diagnostics{{
 				Severity:    hcl.DiagError,
