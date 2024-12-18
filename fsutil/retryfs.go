@@ -26,9 +26,9 @@ type retryFS struct {
 	retryDelay time.Duration
 }
 
-func (f *retryFS) ReadFile(name string) ([]byte, error) {
+func (f *retryFS) ReadFile(name string) (content []byte, err error) {
 	for retry := f.retryCount; retry > 0; retry-- {
-		content, err := fs.ReadFile(f.fs, name)
+		content, err = fs.ReadFile(f.fs, name)
 		if err != nil {
 			select {
 			case <-f.ctx.Done():
@@ -39,7 +39,7 @@ func (f *retryFS) ReadFile(name string) ([]byte, error) {
 		}
 		return content, nil
 	}
-	return nil, fmt.Errorf("exceeded %d retries for %s", f.retryCount, name)
+	return nil, fmt.Errorf("exceeded %d retries for %s: %w", f.retryCount, name, err)
 }
 
 func (f *retryFS) Open(name string) (fs.File, error) {
