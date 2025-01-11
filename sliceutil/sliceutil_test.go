@@ -70,8 +70,9 @@ func TestIntersect(t *testing.T) {
 
 func TestUnique(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, Unique([]string{"a", "b", "c"}))
-	assert.Equal(t, []string{"a", "b", "c"}, Unique([]string{"a", "b", "a", "c", "b"}))
-	assert.Equal(t, []string{"a", "b", "c"}, Unique([]string{"a", "b", "c", "a", "b", "c"}))
+	assert.Equal(t, []string{"c"}, Unique([]string{"a", "b", "a", "c", "b"}))
+	assert.Equal(t, []string{}, Unique([]string{"a", "b", "c", "a", "b", "c"}))
+	assert.Equal(t, []string{"a"}, Unique([]string{"a", "b"}, []string{"b"}))
 	assert.Equal(t, []string{}, Unique([]string{}))
 }
 
