@@ -123,7 +123,27 @@ func Intersect[T comparable](slices ...[]T) []T {
 }
 
 // Unique returns a new slice with the unique elements of all slices.
+// The order of the elements is preserved.
 func Unique[T comparable](slices ...[]T) []T {
+	if len(slices) == 0 {
+		return nil
+	}
+	s := make(map[T]struct{})
+	o := make([]T, 0)
+	for _, x := range slices {
+		for _, x := range x {
+			if _, ok := s[x]; !ok {
+				o = append(o, x)
+			}
+			s[x] = struct{}{}
+		}
+	}
+	return o
+}
+
+// Once returns a new slice with the elements that are present only once in all
+// slices.
+func Once[T comparable](slices ...[]T) []T {
 	c := make(map[T]int)
 	o := make([]T, 0)
 	for _, s := range slices {
