@@ -24,8 +24,9 @@ import (
 
 func TestCopy(t *testing.T) {
 	m := []string{"a", "b", "c"}
-	assert.Equal(t, m, Copy(m))
-	assert.NotSame(t, m, Copy(m))
+	n := Copy(m)
+	assert.Equal(t, m, n)
+	assert.NotSame(t, &m, &n)
 }
 
 func TestContains(t *testing.T) {
@@ -42,14 +43,16 @@ func TestContainsAll(t *testing.T) {
 
 func TestMap(t *testing.T) {
 	m := []string{"a", "b", "c"}
-	assert.Equal(t, []string{"A", "B", "C"}, Map(m, strings.ToUpper))
-	assert.NotSame(t, m, Map(m, strings.ToUpper))
+	n := Map(m, strings.ToUpper)
+	assert.Equal(t, []string{"A", "B", "C"}, n)
+	assert.NotSame(t, &m, &n)
 }
 
 func TestFilter(t *testing.T) {
 	m := []string{"a", "b", "c"}
-	assert.Equal(t, []string{"a", "b"}, Filter(m, func(s string) bool { return s != "c" }))
-	assert.NotSame(t, m, Filter(m, func(s string) bool { return s != "c" }))
+	n := Filter(m, func(s string) bool { return s != "c" })
+	assert.Equal(t, []string{"a", "b"}, n)
+	assert.NotSame(t, &m, &n)
 }
 
 func TestIsUnique(t *testing.T) {
