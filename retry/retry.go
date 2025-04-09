@@ -20,17 +20,20 @@ import (
 	"time"
 )
 
-// Try runs the f function until it returns nil but not more than defined in
-// the attempts argument. After reaching the max attempts, it returns the last
-// error. The delay argument defines the time between each attempt. If the
-// context is canceled, the function stops and returns the error.
-func Try(ctx context.Context, f func() error, attempts int, delay time.Duration) (err error) {
-	for i := 0; i < attempts; i++ {
+const (
+	TryAgain = false
+	Stop     = true
+)
+
+// Try will call the function f until it returns true or the context is done.
+// If attempts is negative, Try will try forever.
+func Try(ctx context.Context, f func(context.Context) bool, attempts int, delay time.Duration) (ok bool) {
+	for i := 0; attempts < 0 || i < attempts; i++ {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return false
 		}
-		if err = f(); err == nil {
-			return nil
+		if f(ctx) {
+			return true
 		}
 		if attempts < 0 || i < attempts {
 			t := time.NewTimer(delay)
@@ -41,24 +44,66 @@ func Try(ctx context.Context, f func() error, attempts int, delay time.Duration)
 			t.Stop()
 		}
 	}
+	return false
+}
+
+// Try1 is a helper function that simplifies the common case of retrying a
+// function that returns a single value.
+func Try1[T any](ctx context.Context, f func(context.Context) (T, bool), attempts int, delay time.Duration) (res T) {
+	var ok bool
+	ok = Try(ctx, func(ctx context.Context) bool {
+		res, ok = f(ctx)
+		return ok
+	}, attempts, delay)
+	return res
+}
+
+// Try2 is a helper function that simplifies the common case of retrying a
+// function that returns two values.
+func Try2[T1, T2 any](ctx context.Context, f func(context.Context) (T1, T2, bool), attempts int, delay time.Duration) (res1 T1, res2 T2) {
+	var ok bool
+	ok = Try(ctx, func(ctx context.Context) bool {
+		res1, res2, ok = f(ctx)
+		return ok
+	}, attempts, delay)
+	return res1, res2
+}
+
+// TryErr will call the function f until it returns no error or the context is
+// done. If attempts is negative, TryErr will try forever.
+func TryErr(ctx context.Context, f func(context.Context) error, attempts int, delay time.Duration) (err error) {
+	Try(ctx, func(ctx context.Context) bool {
+		err = f(ctx)
+		return err == nil
+	}, attempts, delay)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	return err
 }
 
-// TryForever runs the f function until it returns nil or the context is
-// canceled. The delay argument defines the time between each attempt.
-func TryForever(ctx context.Context, f func() error, delay time.Duration) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		if err := f(); err == nil {
-			return
-		}
-		t := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-		case <-t.C:
-		}
-		t.Stop()
+// Try1Err is a helper function that simplifies the common case of retrying a
+// function that returns a single value and an error.
+func Try1Err[T any](ctx context.Context, f func(context.Context) (T, error), attempts int, delay time.Duration) (res T, err error) {
+	Try(ctx, func(ctx context.Context) bool {
+		res, err = f(ctx)
+		return err == nil
+	}, attempts, delay)
+	if ctx.Err() != nil {
+		return res, ctx.Err()
 	}
+	return res, err
+}
+
+// Try2Err is a helper function that simplifies the common case of retrying a
+// function that returns two values and an error.
+func Try2Err[T1, T2 any](ctx context.Context, f func(context.Context) (T1, T2, error), attempts int, delay time.Duration) (res1 T1, res2 T2, err error) {
+	Try(ctx, func(ctx context.Context) bool {
+		res1, res2, err = f(ctx)
+		return err == nil
+	}, attempts, delay)
+	if ctx.Err() != nil {
+		return res1, res2, ctx.Err()
+	}
+	return res1, res2, err
 }

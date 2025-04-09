@@ -17,8 +17,37 @@ package errutil
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
+
+// Join joins the provided errors or messages into a single error.
+func Join(vs ...any) (err error) {
+	if len(vs) == 0 {
+		return nil
+	}
+	for _, v := range vs {
+		if v == nil {
+			continue
+		}
+		if err == nil {
+			switch v := v.(type) {
+			case error:
+				err = v
+			default:
+				err = fmt.Errorf("%v", v)
+			}
+			continue
+		}
+		switch v := v.(type) {
+		case error:
+			err = fmt.Errorf("%w: %w", err, v)
+		default:
+			err = fmt.Errorf("%w: %v", err, v)
+		}
+	}
+	return err
+}
 
 // Append combines the provided error with a list of errors.
 func Append(err error, errs ...error) error {

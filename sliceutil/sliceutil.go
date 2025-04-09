@@ -15,6 +15,11 @@
 
 package sliceutil
 
+import (
+	"cmp"
+	"slices"
+)
+
 // Copy returns a copy of the slice.
 func Copy[T any](s []T) []T {
 	newSlice := make([]T, len(s))
@@ -179,6 +184,34 @@ func AppendUnique[T comparable](s []T, ee ...T) []T {
 			continue
 		}
 		s = append(s, e)
+	}
+	return s
+}
+
+// AppendUniqueSort appends e to s if e is not already present in s and
+// sorts the slice.
+//
+// Note, that s slice must be sorted before calling this function.
+func AppendUniqueSort[T cmp.Ordered](s []T, vs ...T) []T {
+	for _, v := range vs {
+		idx, has := slices.BinarySearch(s, v)
+		if !has {
+			s = slices.Insert(s, idx, v)
+		}
+	}
+	return s
+}
+
+// AppendUniqueSortFunc appends e to s if e is not already present in s and
+// sorts the slice.
+//
+// Note, that s slice must be sorted before calling this function.
+func AppendUniqueSortFunc[T any](s []T, cmp func(T, T) int, vs ...T) []T {
+	for _, v := range vs {
+		idx, has := slices.BinarySearchFunc(s, v, cmp)
+		if !has {
+			s = slices.Insert(s, idx, v)
+		}
 	}
 	return s
 }

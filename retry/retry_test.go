@@ -21,63 +21,218 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestTry_noerror(t *testing.T) {
-	n := time.Now()
+func TestRetry(t *testing.T) {
+	tc := []struct {
+		name       string
+		attempts   int
+		delay      time.Duration
+		ctxTimeout time.Duration
+		fn         func() func(context.Context) error
+		wantFail   bool
+		wantErr    error
+	}{
+		{
+			name:       "try max attempts",
+			attempts:   3,
+			delay:      10 * time.Millisecond,
+			ctxTimeout: 100 * time.Millisecond,
+			fn: func() func(context.Context) error {
+				return func(ctx context.Context) error {
+					return errors.New("error")
+				}
+			},
+			wantFail: true,
+			wantErr:  errors.New("error"),
+		},
+		{
+			name:       "try success",
+			attempts:   3,
+			delay:      10 * time.Millisecond,
+			ctxTimeout: 100 * time.Millisecond,
+			fn: func() func(context.Context) error {
+				c := 0
+				return func(ctx context.Context) error {
+					c++
+					if c == 3 {
+						return nil
+					}
+					return errors.New("error")
+				}
+			},
+		},
+		{
+			name:       "try fail",
+			attempts:   3,
+			delay:      10 * time.Millisecond,
+			ctxTimeout: 100 * time.Millisecond,
+			fn: func() func(context.Context) error {
+				return func(ctx context.Context) error {
+					return errors.New("error")
+				}
+			},
+			wantFail: true,
+			wantErr:  errors.New("error"),
+		},
+		{
+			name:       "try ctx cancel",
+			attempts:   -1,
+			delay:      10 * time.Millisecond,
+			ctxTimeout: 50 * time.Millisecond,
+			fn: func() func(context.Context) error {
+				return func(ctx context.Context) error {
+					<-ctx.Done()
+					return errors.New("error")
+				}
+			},
+			wantFail: true,
+			wantErr:  context.DeadlineExceeded,
+		},
+	}
+	for _, tt := range tc {
+		t.Run(tt.name, func(t *testing.T) {
+			switch {
+			case tt.wantFail:
+				t.Run("try", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.False(t, Try(ctx, func(ctx context.Context) bool {
+						return fn(ctx) == nil
+					}, tt.attempts, tt.delay))
+				})
 
-	require.NoError(t, Try(context.Background(), func() error {
-		return nil
-	}, 3, time.Millisecond*100))
+				t.Run("try1", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, "", Try1(ctx, func(ctx context.Context) (string, bool) {
+						if fn(ctx) == nil {
+							return "success", true
+						}
+						return "", false
+					}, tt.attempts, tt.delay))
+				})
 
-	require.Less(t, time.Since(n), time.Millisecond*100)
+				t.Run("try2", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"", 0}, unpack(Try2(ctx, func(ctx context.Context) (string, int, bool) {
+						if fn(ctx) == nil {
+							return "success", 42, true
+						}
+						return "", 0, false
+					}, tt.attempts, tt.delay)))
+					assert.Equal(t, tt.wantErr, TryErr(ctx, fn, tt.attempts, tt.delay))
+				})
+
+				t.Run("tryErr", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, tt.wantErr, TryErr(ctx, func(ctx context.Context) error {
+						return fn(ctx)
+					}, tt.attempts, tt.delay))
+				})
+
+				t.Run("try1Err", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"", tt.wantErr}, unpack(Try1Err(ctx, func(ctx context.Context) (string, error) {
+						if fn(ctx) == nil {
+							return "success", nil
+						}
+						return "", errors.New("error")
+					}, tt.attempts, tt.delay)))
+				})
+
+				t.Run("try2Err", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"", 0, tt.wantErr}, unpack(Try2Err(ctx, func(ctx context.Context) (string, int, error) {
+						if fn(ctx) == nil {
+							return "success", 42, nil
+						}
+						return "", 0, errors.New("error")
+					}, tt.attempts, tt.delay)))
+				})
+			default:
+				t.Run("try", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.True(t, Try(ctx, func(ctx context.Context) bool {
+						return fn(ctx) == nil
+					}, tt.attempts, tt.delay))
+				})
+
+				t.Run("try1", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, "success", Try1(ctx, func(ctx context.Context) (string, bool) {
+						println("a")
+						if fn(ctx) == nil {
+							return "success", true
+						}
+						return "", false
+					}, tt.attempts, tt.delay))
+				})
+
+				t.Run("try2", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"success", 42}, unpack(Try2(ctx, func(ctx context.Context) (string, int, bool) {
+						if fn(ctx) == nil {
+							return "success", 42, true
+						}
+						return "", 0, false
+					}, tt.attempts, tt.delay)))
+				})
+
+				t.Run("tryErr", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Nil(t, TryErr(ctx, func(ctx context.Context) error {
+						return fn(ctx)
+					}, tt.attempts, tt.delay))
+				})
+
+				t.Run("try1Err", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"success", nil}, unpack(Try1Err(ctx, func(ctx context.Context) (string, error) {
+						if fn(ctx) == nil {
+							return "success", nil
+						}
+						return "", errors.New("error")
+					}, tt.attempts, tt.delay)))
+				})
+
+				t.Run("try2Err", func(t *testing.T) {
+					ctx, cancel := context.WithTimeout(context.Background(), tt.ctxTimeout)
+					defer cancel()
+					fn := tt.fn()
+					assert.Equal(t, []any{"success", 42, nil}, unpack(Try2Err(ctx, func(ctx context.Context) (string, int, error) {
+						if fn(ctx) == nil {
+							return "success", 42, nil
+						}
+						return "", 0, errors.New("error")
+					}, tt.attempts, tt.delay)))
+				})
+			}
+		})
+	}
 }
 
-func TestTry_error(t *testing.T) {
-	n := time.Now()
-	c := 0
-
-	require.Error(t, Try(context.Background(), func() error {
-		c++
-		return errors.New("error")
-	}, 3, time.Millisecond*100))
-
-	require.Greater(t, time.Since(n), time.Millisecond*200)
-	require.Equal(t, 3, c)
-}
-
-func TestTry_ctxCancel(t *testing.T) {
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	n := time.Now()
-	time.AfterFunc(time.Millisecond*100, ctxCancel)
-
-	require.Error(t, Try(ctx, func() error {
-		return errors.New("error")
-	}, 3, time.Second*1))
-
-	require.Less(t, time.Since(n), time.Millisecond*200)
-}
-
-func TestTryForever_noerror(t *testing.T) {
-	n := time.Now()
-
-	TryForever(context.Background(), func() error {
-		return nil
-	}, time.Millisecond*100)
-
-	require.Less(t, time.Since(n), time.Millisecond*100)
-}
-
-func TestTryForever_ctxCancel(t *testing.T) {
-	ctx, ctxCancel := context.WithCancel(context.Background())
-	time.AfterFunc(time.Millisecond*175, ctxCancel)
-
-	tries := 0
-	TryForever(ctx, func() error {
-		tries++
-		return errors.New("error")
-	}, 50*time.Millisecond)
-
-	require.Equal(t, tries, 4)
+func unpack(a ...any) []any {
+	return a
 }

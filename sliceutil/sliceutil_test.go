@@ -99,3 +99,62 @@ func TestAppendUnique(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c", "d"}, AppendUnique([]string{"a", "b", "c"}, "c", "d"))
 	assert.Equal(t, []string{"a", "b", "c", "d", "e"}, AppendUnique([]string{"a", "b", "c"}, "d", "e"))
 }
+
+func TestAppendUniqueSort(t *testing.T) {
+	assert.Equal(t, []int{5}, AppendUniqueSort([]int{}, 5))
+	assert.Equal(t, []int{1, 2, 3, 4, 5}, AppendUniqueSort([]int{1, 3, 5}, 2, 4))
+	assert.Equal(t, []int{1, 2, 3, 4, 5}, AppendUniqueSort([]int{1, 3, 5}, 2, 3, 4))
+	assert.Equal(t, []int{1, 2, 3}, AppendUniqueSort([]int{1, 2, 3}, 1, 2, 3))
+	assert.Equal(t, []string{"a", "b", "c", "d"}, AppendUniqueSort([]string{"a", "c"}, "b", "d", "c"))
+	assert.Equal(t, []float64{1.1, 2.2, 3.3, 4.4}, AppendUniqueSort([]float64{1.1, 3.3}, 2.2, 4.4))
+}
+
+func TestAppendUniqueSortFunc(t *testing.T) {
+	type Person struct {
+		Name string
+		Age  int
+	}
+
+	compareByAge := func(a, b Person) int {
+		return a.Age - b.Age
+	}
+
+	alice := Person{Name: "Alice", Age: 30}
+	bob := Person{Name: "Bob", Age: 25}
+	charlie := Person{Name: "Charlie", Age: 35}
+
+	assert.Equal(t, []Person{alice}, AppendUniqueSortFunc([]Person{}, compareByAge, alice))
+	assert.Equal(t, []Person{bob, alice, charlie}, AppendUniqueSortFunc([]Person{bob, charlie}, compareByAge, alice))
+	assert.Equal(t, []Person{bob, alice}, AppendUniqueSortFunc([]Person{bob, alice}, compareByAge, alice))
+
+	// Test with reverse sorted integers
+	reverseCompare := func(a, b int) int {
+		return b - a
+	}
+
+	assert.Equal(t, []int{5, 3, 1}, AppendUniqueSortFunc([]int{5, 1}, reverseCompare, 3))
+	assert.Equal(t, []int{5, 3, 1}, AppendUniqueSortFunc([]int{5, 3, 1}, reverseCompare, 3))
+}
+
+func TestMapErr(t *testing.T) {
+	// Test successful mapping
+	m := []int{1, 2, 3}
+	successFn := func(i int) (string, error) {
+		return string(rune(i + '0')), nil
+	}
+	result, err := MapErr(m, successFn)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1", "2", "3"}, result)
+
+	// Test error case
+	errFn := func(i int) (string, error) {
+		if i == 2 {
+			return "", assert.AnError
+		}
+		return string(rune(i + '0')), nil
+	}
+	result, err = MapErr(m, errFn)
+	assert.Error(t, err)
+	assert.Equal(t, assert.AnError, err)
+	assert.Nil(t, result)
+}

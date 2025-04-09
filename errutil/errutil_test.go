@@ -23,6 +23,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestJoin(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		result := Join(nil)
+		assert.Nil(t, result)
+	})
+
+	t.Run("single error", func(t *testing.T) {
+		result := Join(errors.New("error1"))
+		assert.Equal(t, "error1", result.Error())
+	})
+
+	t.Run("multiple errors", func(t *testing.T) {
+		result := Join(errors.New("error1"), errors.New("error2"))
+		assert.Equal(t, "error1: error2", result.Error())
+	})
+
+	t.Run("error and message", func(t *testing.T) {
+		result := Join(errors.New("error1"), "message1")
+		assert.Equal(t, "error1: message1", result.Error())
+	})
+}
+
 func TestAppend(t *testing.T) {
 	err1 := errors.New("error1")
 	err2 := errors.New("error2")
