@@ -41,7 +41,7 @@ func NewFileProto(opts ...FileOption) Protocol {
 		opt(f)
 	}
 	if f.wd == "" {
-		f.wd = "/"
+		f.wd = "."
 	}
 	return f
 }

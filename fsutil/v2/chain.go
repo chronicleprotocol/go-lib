@@ -53,6 +53,9 @@ type chainProto struct {
 
 // FileSystem implements the Protocol interface.
 func (c *chainProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
+	if url == nil {
+		return nil, "", errChainProtoNilURI
+	}
 	return NewChainFS(c.opts...), uriPath(url, true), nil
 }
 
@@ -166,6 +169,8 @@ func (c *chainFS) iter() []int {
 	}
 	return i
 }
+
+var errChainProtoNilURI = fmt.Errorf("fsutil.chainProto: nil URI")
 
 func errChainFSFn(err error) error {
 	return fmt.Errorf("fsutil.chainFS: %w", err)

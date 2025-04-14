@@ -23,7 +23,6 @@ import (
 	"io/fs"
 	"net/http"
 	netURL "net/url"
-	"strings"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -33,7 +32,7 @@ type IPFSOption func(*ipfsFS)
 type IPFSGateway struct {
 	Scheme    string
 	Host      string
-	ResolveFn func(fs *httpFS, name string) (*netURL.URL, error)
+	ResolveFn func(cid string) func(f *httpFS, name string) (*netURL.URL, error)
 }
 
 // WithIPFSHTTPClient sets the HTTP client used to perform HTTP requests.
@@ -70,17 +69,20 @@ type ipfsProto struct {
 }
 
 // FileSystem implements the Protocol interface.
-func (m *ipfsProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
-	if url == nil {
-		return nil, "", errIPFSNilURI
+func (m *ipfsProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error) {
+	if err := validIPFSURI(uri); err != nil {
+		return nil, "", err
 	}
-	if url.Scheme != "ipfs" && url.Scheme != "ipfs+gateway" {
-		return nil, "", errIPFSUnexpectedSchemeFn(url.Scheme)
+	fs, err = NewIPFSFS(m.ctx, uri.Host, m.opts...)
+	if err != nil {
+		return nil, "", errIPFSProtoFn(err)
 	}
-	if url.Opaque != "" {
-		return nil, "", errIPFSInvalidURIFn("opaque not allowed")
+	path = uriPath(uri, true)
+	if path == "" {
+		// Empty paths are not allowed by fs.FS.
+		path = "."
 	}
-	return NewIPFSFS(m.ctx, m.opts...), fmt.Sprintf("%s/%s", url.Host, uriPath(url, true)), nil
+	return fs, path, nil
 }
 
 // NewIPFSFS creates a new IPFS filesystem.
@@ -92,7 +94,10 @@ func (m *ipfsProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err erro
 // It is important to provide a checksum, as there is no guarantee that
 // the data returned from IPFS gateways is valid. A misconfigured or malicious
 // gateway could return a different or corrupted file.
-func NewIPFSFS(ctx context.Context, opts ...IPFSOption) fs.FS {
+func NewIPFSFS(ctx context.Context, cid string, opts ...IPFSOption) (fs.FS, error) {
+	if cid == "" {
+		return nil, errIPFSFSEmptyCID
+	}
 	i := &ipfsFS{}
 	for _, opt := range opts {
 		opt(i)
@@ -113,7 +118,7 @@ func NewIPFSFS(ctx context.Context, opts ...IPFSOption) fs.FS {
 				ctx:     ctx,
 				client:  i.client,
 				baseURI: &netURL.URL{Scheme: gw.Scheme, Host: gw.Host},
-				parseFn: gw.ResolveFn,
+				parseFn: gw.ResolveFn(cid),
 			},
 			hash:  i.checksumHash,
 			param: "checksum",
@@ -121,7 +126,7 @@ func NewIPFSFS(ctx context.Context, opts ...IPFSOption) fs.FS {
 		})
 	}
 	i.cfs = cfs
-	return i
+	return i, nil
 }
 
 type ipfsFS struct {
@@ -133,49 +138,40 @@ type ipfsFS struct {
 
 func (h *ipfsFS) Open(name string) (fs.File, error) {
 	if !fs.ValidPath(name) {
-		return nil, errIPFSInvalidPathFn(name)
+		return nil, errIPFSFSInvalidPathFn(name, nil)
 	}
 	return h.cfs.Open(name)
 }
 
-func IPFSPathResolution(f *httpFS, name string) (*netURL.URL, error) {
-	var cid string
-	var path string
-	parts := strings.SplitN(name, "/", 2)
-	switch len(parts) {
-	case 1:
-		cid = parts[0]
-	default:
-		cid = parts[0]
-		path = parts[1]
+func IPFSPathResolution(cid string) func(f *httpFS, name string) (*netURL.URL, error) {
+	return func(f *httpFS, name string) (*netURL.URL, error) {
+		httpPath := "/ipfs/" + cid
+		if name != "" && name != "." {
+			httpPath += "/" + name
+		}
+		url := &netURL.URL{
+			Scheme: f.baseURI.Scheme,
+			User:   f.baseURI.User,
+			Host:   f.baseURI.Host,
+			Path:   httpPath,
+		}
+		return url, nil
 	}
-	url := &netURL.URL{
-		Scheme: f.baseURI.Scheme,
-		User:   f.baseURI.User,
-		Host:   f.baseURI.Host,
-		Path:   fmt.Sprintf("/ipfs/%s/%s", cid, path),
-	}
-	return url, nil
 }
 
-func IPFSSubdomainResolution(f *httpFS, name string) (*netURL.URL, error) {
-	var cid string
-	var path string
-	parts := strings.SplitN(name, "/", 2)
-	switch len(parts) {
-	case 1:
-		cid = parts[0]
-	default:
-		cid = parts[0]
-		path = parts[1]
+func IPFSSubdomainResolution(cid string) func(f *httpFS, name string) (*netURL.URL, error) {
+	return func(f *httpFS, name string) (*netURL.URL, error) {
+		if name == "." {
+			name = ""
+		}
+		url := &netURL.URL{
+			Scheme: f.baseURI.Scheme,
+			User:   f.baseURI.User,
+			Host:   fmt.Sprintf("%s.%s", cid, f.baseURI.Host),
+			Path:   name,
+		}
+		return url, nil
 	}
-	url := &netURL.URL{
-		Scheme: f.baseURI.Scheme,
-		User:   f.baseURI.User,
-		Host:   fmt.Sprintf("%s.%s", cid, f.baseURI.Host),
-		Path:   path,
-	}
-	return url, nil
 }
 
 var ipfsGateways = []*IPFSGateway{
@@ -191,21 +187,48 @@ var ipfsGateways = []*IPFSGateway{
 	{Scheme: "https", Host: "nftstorage.link", ResolveFn: IPFSPathResolution},
 }
 
+func validIPFSURI(uri *netURL.URL) error {
+	if uri == nil {
+		return errIPFSProtoNilURI
+	}
+	if uri.Scheme != "ipfs" && uri.Scheme != "ipfs+gateway" {
+		return errIPFSProtoUnexpectedSchemeFn(uri.Scheme)
+	}
+	if uri.Opaque != "" {
+		return errIPFSProtoOpaqueNotAllowed
+	}
+	if uri.Host == "" {
+		return errIPFSProtoEmptyHost
+	}
+	if uri.OmitHost {
+		return errIPFSProtoOmitHost
+	}
+	if uri.Fragment != "" || uri.RawFragment != "" {
+		return errIPFSProtoFragmentNotAllowed
+	}
+	return nil
+}
+
 var (
-	errIPFSNilURI           = errors.New("fsutil.ipfs: nil URI")
-	errIPFSInvalidURI       = errors.New("fsutil.ipfs: invalid URI")
-	errIPFSInvalidPath      = errors.New("fsutil.ipfs: invalid path")
-	errIPFSUnexpectedScheme = errors.New("fsutil.ipfs: unexpected scheme")
+	errIPFSProtoNilURI             = errors.New("fsutil.ipfsProto: nil URI")
+	errIPFSProtoOpaqueNotAllowed   = errors.New("fsutil.ipfsProto: opaque not allowed")
+	errIPFSProtoEmptyHost          = errors.New("fsutil.ipfsProto: empty host")
+	errIPFSProtoOmitHost           = errors.New("fsutil.ipfsProto: omit host must be false")
+	errIPFSProtoFragmentNotAllowed = errors.New("fsutil.ipfsProto: fragment not allowed")
+	errIPFSFSEmptyCID              = fmt.Errorf("fsutil.ipfsFS: empty CID")
 )
 
-func errIPFSInvalidPathFn(path string) error {
-	return fmt.Errorf("%w: %w", errIPFSInvalidPath, errInvalidPathFn(path))
+func errIPFSProtoFn(err error) error {
+	return fmt.Errorf("fsutil.ipfsProto: %w", err)
 }
 
-func errIPFSUnexpectedSchemeFn(scheme string) error {
-	return fmt.Errorf("%w: %s", errIPFSUnexpectedScheme, scheme)
+func errIPFSProtoUnexpectedSchemeFn(scheme string) error {
+	return fmt.Errorf("fsutil.ipfsProto: unexpected scheme: %s", scheme)
 }
 
-func errIPFSInvalidURIFn(msg string) error {
-	return fmt.Errorf("%w: %s", errIPFSInvalidURI, msg)
+func errIPFSFSInvalidPathFn(path string, err error) error {
+	if err == nil {
+		return fmt.Errorf("fsutil.ipfsFS: invalid path: %w", errInvalidPathFn(path))
+	}
+	return fmt.Errorf("fsutil.ipfsFS: invalid path: %w: %w", errInvalidPathFn(path), err)
 }

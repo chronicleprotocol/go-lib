@@ -44,8 +44,11 @@ type retryProto struct {
 }
 
 // FileSystem implements the Protocol interface.
-func (m *retryProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
-	fs, path, err = m.proto.FileSystem(url)
+func (m *retryProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error) {
+	if uri == nil {
+		return nil, "", errRetryProtoNilURI
+	}
+	fs, path, err = m.proto.FileSystem(uri)
 	if err != nil {
 		return nil, "", errRetryProtoFn(err)
 	}
@@ -143,6 +146,8 @@ func (r *retryFS) Sub(dir string) (fs.FS, error) {
 func isRetryable(err error) bool {
 	return !errors.Is(err, os.ErrNotExist) && !errors.Is(err, os.ErrPermission) && !errors.Is(err, path.ErrBadPattern) && !isPathError(err)
 }
+
+var errRetryProtoNilURI = errors.New("fsutil.retryProto: nil URI")
 
 func errRetryProtoFn(err error) error {
 	return fmt.Errorf("fsutil.retryProto: %w", err)

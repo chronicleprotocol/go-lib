@@ -50,6 +50,9 @@ type cacheProto struct {
 
 // FileSystem implements the Protocol interface.
 func (c *cacheProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
+	if url == nil {
+		return nil, "", errCacheProtoNilURI
+	}
 	fs, path, err = c.proto.FileSystem(url)
 	if err != nil {
 		return nil, "", errCacheProtoFn(err)
@@ -188,6 +191,8 @@ func (c *cacheFS) cachePath(name string) string {
 	hash.Write([]byte(name))
 	return path.Join(c.dir, hex.EncodeToString(hash.Sum(nil)))
 }
+
+var errCacheProtoNilURI = fmt.Errorf("fsutil.cacheProto: nil URI")
 
 func errCacheProtoFn(err error) error {
 	return fmt.Errorf("fsutil.cacheProto: %w", err)

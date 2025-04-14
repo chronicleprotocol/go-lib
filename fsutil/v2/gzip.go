@@ -75,8 +75,11 @@ type gzipProto struct {
 }
 
 // FileSystem implements the Protocol interface.
-func (m *gzipProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
-	fs, path, err = m.proto.FileSystem(url)
+func (m *gzipProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error) {
+	if uri == nil {
+		return nil, "", errGzipProtoNilURI
+	}
+	fs, path, err = m.proto.FileSystem(uri)
 	if err != nil {
 		return nil, "", errGzipProtoFn(err)
 	}
@@ -228,6 +231,8 @@ func (c *gzipFile) Close() error {
 	}
 	return nil
 }
+
+var errGzipProtoNilURI = errors.New("fsutil.gzipProto: nil URI")
 
 func errGzipProtoFn(err error) error {
 	return fmt.Errorf("fsutil.gzipProto: %w", err)

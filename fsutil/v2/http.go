@@ -48,8 +48,8 @@ type httpProto struct {
 
 // FileSystem implements the Protocol interface.
 func (m *httpProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error) {
-	if err := validURI(uri); err != nil {
-		return nil, "", errHTTPProtoFn(err)
+	if err := validHTTPURI(uri); err != nil {
+		return nil, "", err
 	}
 	var base *netURL.URL
 	base, path = uriSplit(uri)
@@ -62,7 +62,7 @@ func (m *httpProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err erro
 
 // NewHTTPFS creates a new HTTP file system.
 func NewHTTPFS(ctx context.Context, baseURI *netURL.URL, opts ...HTTPFSOption) (fs.FS, error) {
-	if err := validURI(baseURI); err != nil {
+	if err := validHTTPURI(baseURI); err != nil {
 		return nil, errHTTPFSFn(err)
 	}
 	fs := &httpFS{ctx: ctx}
@@ -145,30 +145,42 @@ func lastModTime(headers http.Header) time.Time {
 	return time.Now()
 }
 
-func validURI(uri *netURL.URL) error {
+func validHTTPURI(uri *netURL.URL) error {
 	if uri == nil {
-		return errors.New("nil URI")
+		return errHTTPProtoNilURI
 	}
 	if uri.Scheme != "http" && uri.Scheme != "https" {
-		return fmt.Errorf("unknown scheme: %s", uri.Scheme)
+		return errHTTPProtoUnexpectedSchemeFn(uri.Scheme)
 	}
 	if uri.Opaque != "" {
-		return errors.New("non-nil opaque")
+		return errHTTPProtoOpaqueNotAllowed
 	}
 	if uri.Host == "" {
-		return errors.New("empty host")
+		return errHTTPProtoEmptyHost
 	}
 	if uri.OmitHost {
-		return errors.New("omit host must be false")
+		return errHTTPProtoOmitHost
 	}
 	if uri.Fragment != "" || uri.RawFragment != "" {
-		return errors.New("fragment not allowed")
+		return errHTTPProtoFragmentNotAllowed
 	}
 	return nil
 }
 
+var (
+	errHTTPProtoNilURI             = errors.New("fsutil.httpProto: nil URI")
+	errHTTPProtoOpaqueNotAllowed   = errors.New("fsutil.httpProto: opaque not allowed")
+	errHTTPProtoEmptyHost          = errors.New("fsutil.httpProto: empty host")
+	errHTTPProtoOmitHost           = errors.New("fsutil.httpProto: omit host must be false")
+	errHTTPProtoFragmentNotAllowed = errors.New("fsutil.httpProto: fragment not allowed")
+)
+
 func errHTTPProtoFn(err error) error {
 	return fmt.Errorf("fsutil.httpProto: %w", err)
+}
+
+func errHTTPProtoUnexpectedSchemeFn(scheme string) error {
+	return fmt.Errorf("fsutil.httpProto: unexpected scheme: %s", scheme)
 }
 
 func errHTTPFSFn(err error) error {

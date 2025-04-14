@@ -45,6 +45,12 @@ func TestIPFSFS(t *testing.T) {
 		wantErr  bool
 	}{
 		{
+			name:     "path resolution - no path",
+			opts:     []IPFSOption{},
+			uri:      "ipfs://QmTest",
+			wantData: "ipfs path content",
+		},
+		{
 			name:     "path resolution - no checksum",
 			opts:     []IPFSOption{},
 			uri:      "ipfs://QmTest/test.txt",
@@ -74,6 +80,11 @@ func TestIPFSFS(t *testing.T) {
 			client := &http.Client{
 				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 					switch req.URL.String() {
+					case "https://ipfs-path.io/ipfs/QmTest":
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(strings.NewReader("ipfs path content")),
+						}, nil
 					case "https://ipfs-path.io/ipfs/QmTest/test.txt":
 						return &http.Response{
 							StatusCode: http.StatusOK,
@@ -123,7 +134,8 @@ func TestIPFSPathResolution(t *testing.T) {
 	tests := []struct {
 		name    string
 		httpFS  *httpFS
-		input   string
+		cid     string
+		path    string
 		wantURL *url.URL
 		wantErr bool
 	}{
@@ -132,11 +144,12 @@ func TestIPFSPathResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "ipfs.io"},
 			},
-			input: "QmTest",
+			cid:  "QmTest",
+			path: "",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "ipfs.io",
-				Path:   "/ipfs/QmTest/",
+				Path:   "/ipfs/QmTest",
 			},
 		},
 		{
@@ -144,7 +157,8 @@ func TestIPFSPathResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "gateway.pinata.cloud"},
 			},
-			input: "QmTest/test.txt",
+			cid:  "QmTest",
+			path: "test.txt",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "gateway.pinata.cloud",
@@ -156,7 +170,8 @@ func TestIPFSPathResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "ipfs.io"},
 			},
-			input: "QmTest/path/to/file.json",
+			cid:  "QmTest",
+			path: "path/to/file.json",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "ipfs.io",
@@ -172,7 +187,8 @@ func TestIPFSPathResolution(t *testing.T) {
 					User:   url.UserPassword("user", "pass"),
 				},
 			},
-			input: "QmTest/file.txt",
+			cid:  "QmTest",
+			path: "file.txt",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "ipfs.io",
@@ -183,7 +199,12 @@ func TestIPFSPathResolution(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			url, err := IPFSPathResolution(tt.httpFS, tt.input)
+			// Get the resolver function for the CID
+			resolverFn := IPFSPathResolution(tt.cid)
+
+			// Call the resolver function with the httpFS and path
+			url, err := resolverFn(tt.httpFS, tt.path)
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
@@ -204,7 +225,8 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 	tests := []struct {
 		name    string
 		httpFS  *httpFS
-		input   string
+		cid     string
+		path    string
 		wantURL *url.URL
 		wantErr bool
 	}{
@@ -213,7 +235,8 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "dweb.link"},
 			},
-			input: "QmTest",
+			cid:  "QmTest",
+			path: "",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "QmTest.dweb.link",
@@ -225,7 +248,8 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "w3s.link"},
 			},
-			input: "QmTest/test.txt",
+			cid:  "QmTest",
+			path: "test.txt",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "QmTest.w3s.link",
@@ -237,7 +261,8 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 			httpFS: &httpFS{
 				baseURI: &url.URL{Scheme: "https", Host: "ipfs.cyou"},
 			},
-			input: "QmTest/path/to/file.json",
+			cid:  "QmTest",
+			path: "path/to/file.json",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "QmTest.ipfs.cyou",
@@ -253,7 +278,8 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 					User:   url.UserPassword("user", "pass"),
 				},
 			},
-			input: "QmTest/file.txt",
+			cid:  "QmTest",
+			path: "file.txt",
 			wantURL: &url.URL{
 				Scheme: "https",
 				Host:   "QmTest.dweb.link",
@@ -264,7 +290,12 @@ func TestIPFSSubdomainResolution(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			url, err := IPFSSubdomainResolution(tt.httpFS, tt.input)
+			// Get the resolver function for the CID
+			resolverFn := IPFSSubdomainResolution(tt.cid)
+
+			// Call the resolver function with the httpFS and path
+			url, err := resolverFn(tt.httpFS, tt.path)
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				return

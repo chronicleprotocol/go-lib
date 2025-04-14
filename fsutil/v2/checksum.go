@@ -78,8 +78,11 @@ type checksumProto struct {
 }
 
 // FileSystem implements the Protocol interface.
-func (c *checksumProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
-	fs, path, err = c.proto.FileSystem(url)
+func (c *checksumProto) FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error) {
+	if uri == nil {
+		return nil, "", errChecksumProtoNilURI
+	}
+	fs, path, err = c.proto.FileSystem(uri)
 	if err != nil {
 		return nil, "", errChecksumProtoFn(err)
 	}
@@ -241,6 +244,7 @@ func (c checksumFile) calcChecksum() types.Hash {
 }
 
 var (
+	errChecksumProtoNilURI       = errors.New("fsutil.checksumProto: nil URI")
 	errChecksumFSUnsupportedMode = errors.New("fsutil.checksumFS: unsupported verify mode")
 	errChecksumFSMismatch        = errors.New("fsutil.checksumFS: checksum mismatch")
 )
