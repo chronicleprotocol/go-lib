@@ -35,6 +35,23 @@ func WithCacheDir(dir string) CacheFSOption {
 	}
 }
 
+// WithCacheNamespace sets the cache namespace, that is added to the hash of
+// the file name to create a unique cache file name.
+func WithCacheNamespace(ns string) CacheFSOption {
+	return func(c *cacheFS) {
+		c.ns = ns
+	}
+}
+
+func withCacheURL(url *netURL.URL) CacheFSOption {
+	return func(c *cacheFS) {
+		if url == nil {
+			return
+		}
+		c.ns = fmt.Sprintf("%s/%s/%s", c.ns, url.Scheme, url.Host)
+	}
+}
+
 // NewCacheProto creates a new cache protocol.
 //
 // The cache protocol will wrap the filesystem returned by a given protocol
@@ -57,6 +74,7 @@ func (c *cacheProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err err
 	if err != nil {
 		return nil, "", errCacheProtoFn(err)
 	}
+	c.opts = append(c.opts, withCacheURL(url))
 	fs, err = NewCacheFS(fs, c.opts...)
 	if err != nil {
 		return nil, "", errCacheProtoFn(err)
@@ -79,11 +97,10 @@ func NewCacheFS(fs fs.FS, opts ...CacheFSOption) (fs.FS, error) {
 		if err != nil {
 			return nil, errCacheFSFn(err)
 		}
-		dir = path.Join(dir, "suite")
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return nil, errCacheFSFn(err)
-		}
-		c.dir = dir
+		c.dir = path.Join(dir, "suite")
+	}
+	if err := os.MkdirAll(c.dir, 0755); err != nil {
+		return nil, errCacheFSFn(err)
 	}
 	return c, nil
 }
@@ -91,6 +108,7 @@ func NewCacheFS(fs fs.FS, opts ...CacheFSOption) (fs.FS, error) {
 type cacheFS struct {
 	fs  fs.FS
 	dir string
+	ns  string
 }
 
 // Open implements the fs.Open interface.
@@ -206,6 +224,8 @@ func (c *cacheFS) cacheWrite(name string, content []byte) error {
 
 func (c *cacheFS) cachePath(name string) string {
 	hash := sha1.New()
+	hash.Write([]byte(c.ns))
+	hash.Write([]byte{0})
 	hash.Write([]byte(name))
 	return path.Join(c.dir, hex.EncodeToString(hash.Sum(nil)))
 }

@@ -18,7 +18,6 @@ package fsutil
 import (
 	"io/fs"
 	"net/url"
-	"path"
 )
 
 type mockProto struct {
@@ -30,5 +29,5 @@ func (m *mockProto) FileSystem(u *url.URL) (fs.FS, string, error) {
 	if m.returns != nil {
 		return nil, "", m.returns
 	}
-	return m.fs, path.Clean(u.Path), nil
+	return m.fs, uriPath(u, true), nil
 }

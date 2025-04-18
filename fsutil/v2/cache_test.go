@@ -26,6 +26,39 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCacheProto(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "cachefs_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	url1Str := "test://host1/file.txt"
+	url2Str := "test://host2/file.txt"
+	filePath := "file.txt"
+	content1 := "content for host1"
+	content2 := "content for host2"
+
+	mockProto1 := &mockProto{fs: fstest.MapFS{filePath: &fstest.MapFile{Data: []byte(content1)}}}
+	mockProto2 := &mockProto{fs: fstest.MapFS{filePath: &fstest.MapFile{Data: []byte(content2)}}}
+	cacheProto1 := NewCacheProto(mockProto1, WithCacheDir(tempDir))
+	cacheProto2 := NewCacheProto(mockProto2, WithCacheDir(tempDir))
+	f1, p1, err := ParseURI(cacheProto1, url1Str)
+	require.NoError(t, err)
+	f2, p2, err := ParseURI(cacheProto2, url2Str)
+	require.NoError(t, err)
+
+	// Read the file from the first URL
+	c1, err := fs.ReadFile(f1, p1)
+	require.NoError(t, err)
+
+	// Read the file from the second URL
+	c2, err := fs.ReadFile(f2, p2)
+	require.NoError(t, err)
+
+	// Verify the contents
+	assert.Equal(t, content1, string(c1), "Content from URL1 should match")
+	assert.Equal(t, content2, string(c2), "Content from URL2 should match")
+}
+
 func TestCacheFS(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "cachefs_test")
 	require.NoError(t, err)
