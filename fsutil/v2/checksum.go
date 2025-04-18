@@ -126,24 +126,27 @@ type checksumFS struct {
 	mode  ChecksumFSVerifyMode
 }
 
-func (c *checksumFS) Open(n string) (fs.File, error) {
-	n, h := c.checksumParam(n)
-	f, err := c.fs.Open(n)
+func (c *checksumFS) Open(name string) (fs.File, error) {
+	if err := validPath("open", name); err != nil {
+		return nil, errChecksumFSFn(err)
+	}
+	name, hash := c.checksumParam(name)
+	f, err := c.fs.Open(name)
 	if err != nil {
 		return nil, errChecksumFSFn(err)
 	}
-	if h == types.ZeroHash {
+	if hash == types.ZeroHash {
 		return f, nil
 	}
 	switch c.mode {
 	case ChecksumFSVerifyAfterRead:
-		return checksumFile{file: f, checksum: h, hash: c.hash()}, nil
+		return checksumFile{file: f, checksum: hash, hash: c.hash()}, nil
 	case ChecksumFSVerifyAfterOpen:
 		stat, err := f.Stat()
 		if err != nil {
 			return nil, errChecksumFSFn(err)
 		}
-		cfile := checksumFile{file: f, checksum: h, hash: c.hash()}
+		cfile := checksumFile{file: f, checksum: hash, hash: c.hash()}
 		data, err := io.ReadAll(cfile)
 		if err != nil {
 			return nil, errChecksumFSFn(err)
@@ -159,16 +162,25 @@ func (c *checksumFS) Open(n string) (fs.File, error) {
 
 // Glob implements the fs.FS interface.
 func (c *checksumFS) Glob(pattern string) ([]string, error) {
+	if err := validPattern("glob", pattern); err != nil {
+		return nil, errChecksumFSFn(err)
+	}
 	return fs.Glob(c, pattern)
 }
 
 // Stat implements the fs.FS interface.
 func (c *checksumFS) Stat(name string) (fs.FileInfo, error) {
+	if err := validPath("stat", name); err != nil {
+		return nil, errChecksumFSFn(err)
+	}
 	return fs.Stat(c, name)
 }
 
 // ReadFile implements the fs.ReadFileFS interface.
 func (c *checksumFS) ReadFile(name string) ([]byte, error) {
+	if err := validPath("readFile", name); err != nil {
+		return nil, errChecksumFSFn(err)
+	}
 	f, err := c.Open(name)
 	if err != nil {
 		return nil, err
@@ -178,6 +190,9 @@ func (c *checksumFS) ReadFile(name string) ([]byte, error) {
 
 // ReadDir implements the fs.ReadDirFS interface.
 func (c *checksumFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if err := validPath("readDir", name); err != nil {
+		return nil, errChecksumFSFn(err)
+	}
 	return fs.ReadDir(c, name)
 }
 

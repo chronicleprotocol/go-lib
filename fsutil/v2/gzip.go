@@ -113,6 +113,9 @@ type gzipFS struct {
 
 // Open implements the fs.FS interface.
 func (c *gzipFS) Open(name string) (fs.File, error) {
+	if err := validPath("open", name); err != nil {
+		return nil, errGzipFSFn(err)
+	}
 	f, err := c.fs.Open(name)
 	if err != nil {
 		return nil, errGzipFSFn(err)
@@ -125,16 +128,25 @@ func (c *gzipFS) Open(name string) (fs.File, error) {
 
 // Glob implements the fs.GlobFS interface.
 func (c *gzipFS) Glob(pattern string) ([]string, error) {
+	if err := validPattern("glob", pattern); err != nil {
+		return nil, errGzipFSFn(err)
+	}
 	return fs.Glob(c.fs, pattern)
 }
 
 // Stat implements the fs.StatFS interface.
 func (c *gzipFS) Stat(name string) (fs.FileInfo, error) {
+	if err := validPath("stat", name); err != nil {
+		return nil, errGzipFSFn(err)
+	}
 	return fs.Stat(c.fs, name)
 }
 
 // ReadFile implements the fs.ReadFileFS interface.
 func (c *gzipFS) ReadFile(name string) ([]byte, error) {
+	if err := validPath("readFile", name); err != nil {
+		return nil, errGzipFSFn(err)
+	}
 	if !c.shouldDecompress(name) {
 		b, err := fs.ReadFile(c.fs, name)
 		if err != nil {
@@ -158,6 +170,9 @@ func (c *gzipFS) ReadFile(name string) ([]byte, error) {
 
 // ReadDir implements the fs.ReadDirFS interface.
 func (c *gzipFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if err := validPath("readDir", name); err != nil {
+		return nil, errGzipFSFn(err)
+	}
 	return fs.ReadDir(c.fs, name)
 }
 

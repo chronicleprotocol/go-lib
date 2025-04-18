@@ -146,7 +146,7 @@ func TestUriPath(t *testing.T) {
 				Path: "",
 			},
 			inclQueryAndFragment: true,
-			want:                 "",
+			want:                 ".",
 		},
 	}
 

@@ -95,6 +95,9 @@ type cacheFS struct {
 
 // Open implements the fs.Open interface.
 func (c *cacheFS) Open(name string) (fs.File, error) {
+	if err := validPath("open", name); err != nil {
+		return nil, errCacheFSFn(err)
+	}
 	if f, err := c.cacheOpen(name); err == nil {
 		return f, nil
 	}
@@ -121,16 +124,25 @@ func (c *cacheFS) Open(name string) (fs.File, error) {
 
 // Glob implements the fs.Glob interface.
 func (c *cacheFS) Glob(pattern string) ([]string, error) {
+	if err := validPattern("glob", pattern); err != nil {
+		return nil, errCacheFSFn(err)
+	}
 	return fs.Glob(c.fs, pattern)
 }
 
 // Stat implements the fs.Stat interface.
 func (c *cacheFS) Stat(name string) (fs.FileInfo, error) {
+	if err := validPath("stat", name); err != nil {
+		return nil, errCacheFSFn(err)
+	}
 	return fs.Stat(c.fs, name)
 }
 
 // ReadFile implements the fs.ReadFile interface.
 func (c *cacheFS) ReadFile(name string) ([]byte, error) {
+	if err := validPath("readFile", name); err != nil {
+		return nil, errCacheFSFn(err)
+	}
 	if f, err := c.cacheOpen(name); err == nil {
 		b, err := io.ReadAll(f)
 		if err != nil {
@@ -154,12 +166,18 @@ func (c *cacheFS) ReadFile(name string) ([]byte, error) {
 
 // ReadDir implements the fs.ReadDir interface.
 func (c *cacheFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if err := validPath("readDir", name); err != nil {
+		return nil, errCacheFSFn(err)
+	}
 	return fs.ReadDir(c.fs, name)
 }
 
 // Sub implements the fs.Sub interface.
-func (c *cacheFS) Sub(dir string) (fs.FS, error) {
-	return fs.Sub(c.fs, dir)
+func (c *cacheFS) Sub(name string) (fs.FS, error) {
+	if err := validPath("sub", name); err != nil {
+		return nil, errCacheFSFn(err)
+	}
+	return fs.Sub(c.fs, name)
 }
 
 // cacheOpen opens a file in the cache directory.

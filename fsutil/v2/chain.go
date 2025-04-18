@@ -79,6 +79,9 @@ type chainFS struct {
 
 // Open implements the fs.Open interface.
 func (c *chainFS) Open(name string) (fs.File, error) {
+	if err := validPath("open", name); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	var err error
 	for i := range c.iter() {
 		f, fErr := c.fs[i].Open(name)
@@ -92,6 +95,9 @@ func (c *chainFS) Open(name string) (fs.File, error) {
 
 // Glob implements the fs.Glob interface.
 func (c *chainFS) Glob(pattern string) (s []string, err error) {
+	if err := validPattern("glob", pattern); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	for i := range c.iter() {
 		f, fErr := fs.Glob(c.fs[i], pattern)
 		if fErr != nil {
@@ -104,6 +110,9 @@ func (c *chainFS) Glob(pattern string) (s []string, err error) {
 
 // Stat implements the fs.Stat interface.
 func (c *chainFS) Stat(name string) (fs.FileInfo, error) {
+	if err := validPath("stat", name); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	var err error
 	for i := range c.iter() {
 		f, fErr := fs.Stat(c.fs[i], name)
@@ -117,6 +126,9 @@ func (c *chainFS) Stat(name string) (fs.FileInfo, error) {
 
 // ReadFile implements the fs.ReadFile interface.
 func (c *chainFS) ReadFile(name string) ([]byte, error) {
+	if err := validPath("readFile", name); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	var err error
 	for i := range c.iter() {
 		f, fErr := fs.ReadFile(c.fs[i], name)
@@ -130,6 +142,9 @@ func (c *chainFS) ReadFile(name string) ([]byte, error) {
 
 // ReadDir implements the fs.ReadDir interface.
 func (c *chainFS) ReadDir(name string) (s []fs.DirEntry, err error) {
+	if err := validPath("readDir", name); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	for i := range c.iter() {
 		f, fErr := fs.ReadDir(c.fs[i], name)
 		if fErr != nil {
@@ -147,10 +162,13 @@ func (c *chainFS) ReadDir(name string) (s []fs.DirEntry, err error) {
 }
 
 // Sub implements the fs.Sub interface.
-func (c *chainFS) Sub(dir string) (fs.FS, error) {
+func (c *chainFS) Sub(name string) (fs.FS, error) {
+	if err := validPath("sib", name); err != nil {
+		return nil, errChainFSFn(err)
+	}
 	var err error
 	for i := range c.iter() {
-		f, fErr := fs.Sub(c.fs[i], dir)
+		f, fErr := fs.Sub(c.fs[i], name)
 		if fErr == nil {
 			return f, nil
 		}

@@ -56,7 +56,7 @@ func TestHTTPProto(t *testing.T) {
 		{
 			name:     "valid URL",
 			uri:      "http://localhost",
-			wantPath: "",
+			wantPath: ".",
 		},
 		{
 			name:     "path",
@@ -99,7 +99,7 @@ func TestHTTPFS(t *testing.T) {
 	ctx := context.Background()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/test.txt", "/dir/test2.txt":
+		case "/", "/test.txt", "/dir/test2.txt":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("test content"))
 		case "/query.txt":
@@ -131,6 +131,11 @@ func TestHTTPFS(t *testing.T) {
 			name:    "valid request",
 			baseURL: "http://localhost",
 			file:    "test.txt",
+		},
+		{
+			name:    "valid request - no path",
+			baseURL: "http://localhost",
+			file:    ".",
 		},
 		{
 			name:    "valid request - subdir",

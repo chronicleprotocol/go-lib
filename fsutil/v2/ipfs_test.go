@@ -51,6 +51,12 @@ func TestIPFSFS(t *testing.T) {
 			wantData: "ipfs path content",
 		},
 		{
+			name:     "path resolution - no path with valid checksum",
+			opts:     []IPFSOption{},
+			uri:      fmt.Sprintf("ipfs://QmTest/?checksum=%s", calculateKeccak256([]byte("ipfs path content"))),
+			wantData: "ipfs path content",
+		},
+		{
 			name:     "path resolution - no checksum",
 			opts:     []IPFSOption{},
 			uri:      "ipfs://QmTest/test.txt",

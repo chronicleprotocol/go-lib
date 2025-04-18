@@ -70,6 +70,9 @@ func NewRetryFS(ctx context.Context, fs fs.FS, attempts int, delay time.Duration
 
 // Open implements the fs.Open interface.
 func (r *retryFS) Open(name string) (f fs.File, err error) {
+	if err := validPath("open", name); err != nil {
+		return nil, errRetryFSFn(err)
+	}
 	return retry.Try2(r.ctx, func(_ context.Context) (fs.File, error, bool) {
 		f, err = r.fs.Open(name)
 		if err == nil {
@@ -84,6 +87,9 @@ func (r *retryFS) Open(name string) (f fs.File, err error) {
 
 // Glob implements the fs.Glob interface.
 func (r *retryFS) Glob(pattern string) ([]string, error) {
+	if err := validPattern("glob", pattern); err != nil {
+		return nil, errRetryFSFn(err)
+	}
 	return retry.Try2(r.ctx, func(_ context.Context) (f []string, err error, ok bool) {
 		f, err = fs.Glob(r.fs, pattern)
 		if err == nil {
@@ -98,6 +104,9 @@ func (r *retryFS) Glob(pattern string) ([]string, error) {
 
 // Stat implements the fs.Stat interface.
 func (r *retryFS) Stat(name string) (fs.FileInfo, error) {
+	if err := validPath("stat", name); err != nil {
+		return nil, errRetryFSFn(err)
+	}
 	return retry.Try2(r.ctx, func(_ context.Context) (f fs.FileInfo, err error, ok bool) {
 		f, err = fs.Stat(r.fs, name)
 		if err == nil {
@@ -112,6 +121,9 @@ func (r *retryFS) Stat(name string) (fs.FileInfo, error) {
 
 // ReadFile implements the fs.ReadFile interface.
 func (r *retryFS) ReadFile(name string) ([]byte, error) {
+	if err := validPath("readFile", name); err != nil {
+		return nil, errRetryFSFn(err)
+	}
 	return retry.Try2(r.ctx, func(_ context.Context) (b []byte, err error, ok bool) {
 		b, err = fs.ReadFile(r.fs, name)
 		if err == nil {
@@ -126,6 +138,9 @@ func (r *retryFS) ReadFile(name string) ([]byte, error) {
 
 // ReadDir implements the fs.ReadDir interface.
 func (r *retryFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	if err := validPath("readDir", name); err != nil {
+		return nil, errRetryFSFn(err)
+	}
 	return retry.Try2(r.ctx, func(_ context.Context) (e []fs.DirEntry, err error, ok bool) {
 		e, err = fs.ReadDir(r.fs, name)
 		if err == nil {
@@ -139,8 +154,11 @@ func (r *retryFS) ReadDir(name string) ([]fs.DirEntry, error) {
 }
 
 // Sub implements the fs.Sub interface.
-func (r *retryFS) Sub(dir string) (fs.FS, error) {
-	return fs.Sub(r.fs, dir)
+func (r *retryFS) Sub(name string) (fs.FS, error) {
+	if err := validPath("sub", name); err != nil {
+		return nil, errRetryFSFn(err)
+	}
+	return fs.Sub(r.fs, name)
 }
 
 func isRetryable(err error) bool {

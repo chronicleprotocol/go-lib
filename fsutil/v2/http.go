@@ -87,12 +87,12 @@ type httpFS struct {
 
 // Open implements the fs.FS interface.
 func (f *httpFS) Open(name string) (fs.File, error) {
-	if !fs.ValidPath(name) {
-		return nil, errHTTPFSInvalidPathFn(name, nil)
+	if err := validPath("open", name); err != nil {
+		return nil, errHTTPFSFn(err)
 	}
 	url, err := f.parse(name)
 	if err != nil {
-		return nil, errHTTPFSInvalidPathFn(name, err)
+		return nil, errHTTPFSFn(err)
 	}
 	req, err := http.NewRequestWithContext(f.ctx, http.MethodGet, url.String(), nil)
 	if err != nil {
@@ -127,6 +127,9 @@ func (f *httpFS) Open(name string) (fs.File, error) {
 func (f *httpFS) parse(name string) (*netURL.URL, error) {
 	if f.parseFn != nil {
 		return f.parseFn(f, name)
+	}
+	if name == "." {
+		name = ""
 	}
 	pathURI, err := netURL.Parse(name)
 	if err != nil {
@@ -185,13 +188,6 @@ func errHTTPProtoUnexpectedSchemeFn(scheme string) error {
 
 func errHTTPFSFn(err error) error {
 	return fmt.Errorf("fsutil.httpFS: %w", err)
-}
-
-func errHTTPFSInvalidPathFn(path string, err error) error {
-	if err == nil {
-		return fmt.Errorf("fsutil.httpFS: invalid path: %w", errInvalidPathFn(path))
-	}
-	return fmt.Errorf("fsutil.httpFS: invalid path: %w: %w", errInvalidPathFn(path), err)
 }
 
 func errHTTPFSRequestErrorFn(url *netURL.URL, err error) error {

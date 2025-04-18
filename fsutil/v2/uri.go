@@ -19,11 +19,19 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"path"
 	"strings"
 )
 
-// ParseURI is a helper function that parses a URI for a given protocol.
+// ParseURI is a helper function that parses a URI for a given protocol and returns
+// the appropriate filesystem and path.
+//
+// As a special case, if the URI does not contain a scheme, it is assumed to be
+// a file URI and is prefixed with "file:///".
 func ParseURI(p Protocol, uri string) (fs.FS, string, error) {
+	if !strings.Contains(uri, "://") {
+		uri = "file:///" + uri
+	}
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, "", errParseURIFn(err)
@@ -65,6 +73,13 @@ func uriPath(uri *url.URL, inclQueryAndFragment bool) string {
 		p = p[1:]
 	}
 	w.WriteString(p)
+	switch w.String() {
+	case "":
+		w.WriteString(".")
+	case "/":
+		w.Reset()
+		w.WriteString(".")
+	}
 	if inclQueryAndFragment {
 		if uri.ForceQuery || uri.RawQuery != "" {
 			w.WriteByte('?')
@@ -75,7 +90,7 @@ func uriPath(uri *url.URL, inclQueryAndFragment bool) string {
 			w.WriteString(uri.EscapedFragment())
 		}
 	}
-	return w.String()
+	return path.Clean(w.String())
 }
 
 func errParseURIFn(err error) error {

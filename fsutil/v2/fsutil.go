@@ -19,7 +19,8 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"net/url"
+	netURL "net/url"
+	"path"
 	"time"
 )
 
@@ -29,7 +30,23 @@ import (
 // The returned file system always points to the highest possible level
 // directory.
 type Protocol interface {
-	FileSystem(uri *url.URL) (fs fs.FS, path string, err error)
+	FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error)
+}
+
+// NewFSProto creates a new file system protocol that uses the provided
+// file system.
+func NewFSProto(f fs.FS) Protocol {
+	return &fsProto{fs: f}
+}
+
+type fsProto struct{ fs fs.FS }
+
+// FileSystem implements the Protocol interface.
+func (m *fsProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
+	if url == nil {
+		return nil, "", errFSProtoNilURI
+	}
+	return m.fs, uriPath(url, true), nil
 }
 
 // fileInfo implements the fs.FileInfo interface.
@@ -58,11 +75,32 @@ type file struct {
 func (f *file) Stat() (fs.FileInfo, error)           { return f.info, nil }
 func (f *file) Read(p []byte) (n int, err error)     { return f.reader.Read(p) }
 func (f *file) Close() error                         { return f.reader.Close() }
-func (f *file) ReadDir(_ int) ([]fs.DirEntry, error) { return nil, errReadDirUnsupported }
-
-var errReadDirUnsupported = errors.New("fsutil.file: ReadDir not supported")
+func (f *file) ReadDir(_ int) ([]fs.DirEntry, error) { return nil, errFileReadDirUnsupported }
 
 func isPathError(err error) bool {
 	var e *fs.PathError
 	return errors.As(err, &e)
+}
+
+var (
+	errFSProtoNilURI          = errors.New("fsutil.fsProto: nil URI")
+	errFileReadDirUnsupported = errors.New("fsutil.file: ReadDir not supported")
+)
+
+func validPath(operation, path string) error {
+	if !fs.ValidPath(path) {
+		return errInvalidPathFn(operation, path)
+	}
+	return nil
+}
+
+func validPattern(operation, pattern string) error { //nolint:unparam
+	if _, err := path.Match(pattern, ""); err != nil {
+		return errInvalidPathFn(operation, pattern)
+	}
+	return nil
+}
+
+func errInvalidPathFn(operation string, path string) error {
+	return &fs.PathError{Op: operation, Path: path, Err: fs.ErrInvalid}
 }

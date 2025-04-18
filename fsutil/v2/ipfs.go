@@ -137,8 +137,8 @@ type ipfsFS struct {
 }
 
 func (h *ipfsFS) Open(name string) (fs.File, error) {
-	if !fs.ValidPath(name) {
-		return nil, errIPFSFSInvalidPathFn(name, nil)
+	if err := validPath("open", name); err != nil {
+		return nil, errIPFSFSFn(err)
 	}
 	return h.cfs.Open(name)
 }
@@ -222,13 +222,10 @@ func errIPFSProtoFn(err error) error {
 	return fmt.Errorf("fsutil.ipfsProto: %w", err)
 }
 
-func errIPFSProtoUnexpectedSchemeFn(scheme string) error {
-	return fmt.Errorf("fsutil.ipfsProto: unexpected scheme: %s", scheme)
+func errIPFSFSFn(err error) error {
+	return fmt.Errorf("fsutil.ipfsFS: %w", err)
 }
 
-func errIPFSFSInvalidPathFn(path string, err error) error {
-	if err == nil {
-		return fmt.Errorf("fsutil.ipfsFS: invalid path: %w", errInvalidPathFn(path))
-	}
-	return fmt.Errorf("fsutil.ipfsFS: invalid path: %w: %w", errInvalidPathFn(path), err)
+func errIPFSProtoUnexpectedSchemeFn(scheme string) error {
+	return fmt.Errorf("fsutil.ipfsProto: unexpected scheme: %s", scheme)
 }

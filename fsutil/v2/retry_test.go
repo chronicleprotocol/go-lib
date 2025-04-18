@@ -116,7 +116,7 @@ func TestRetryFS(t *testing.T) {
 			method:        "Open",
 			file:          "/file.txt",
 			wantErr:       true,
-			wantCallCount: 1,
+			wantCallCount: 0,
 		},
 		{
 			name:          "open - retry success",
@@ -148,7 +148,7 @@ func TestRetryFS(t *testing.T) {
 			method:        "Glob",
 			file:          "[]",
 			wantErr:       true,
-			wantCallCount: 1,
+			wantCallCount: 0,
 		},
 		{
 			name:          "glob - retry success",
