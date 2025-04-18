@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/chronicleprotocol/suite/pkg/util/ptrutil"
+	"github.com/chronicleprotocol/go-lib/ptrutil"
 )
 
 func TestEncode(t *testing.T) {

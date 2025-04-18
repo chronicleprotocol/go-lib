@@ -23,7 +23,7 @@ import (
 
 	"github.com/hashicorp/hcl/v2"
 
-	utilHCL "github.com/chronicleprotocol/suite/pkg/util/hcl"
+	utilHCL "github.com/chronicleprotocol/go-lib/hcl"
 )
 
 // Include merges the contents of multiple HCL files specified in the "include"

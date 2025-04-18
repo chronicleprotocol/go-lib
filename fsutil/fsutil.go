@@ -16,21 +16,47 @@
 package fsutil
 
 import (
-	"bytes"
 	"errors"
+	"io"
 	"io/fs"
+	netURL "net/url"
+	"path"
 	"time"
 )
 
-//TODO: Add content hash verification with a provided hash `func (content []byte,hash types.Hash) (bool)`
+// Protocol defines a file system protocol. It provides a file system instance
+// and a path within that file system for a given URI.
+//
+// The returned file system always points to the highest possible level
+// directory.
+type Protocol interface {
+	FileSystem(uri *netURL.URL) (fs fs.FS, path string, err error)
+}
 
+// NewFSProto creates a new file system protocol that uses the provided
+// file system.
+func NewFSProto(f fs.FS) Protocol {
+	return &fsProto{fs: f}
+}
+
+type fsProto struct{ fs fs.FS }
+
+// FileSystem implements the Protocol interface.
+func (m *fsProto) FileSystem(url *netURL.URL) (fs fs.FS, path string, err error) {
+	if url == nil {
+		return nil, "", errFSProtoNilURI
+	}
+	return m.fs, uriPath(url, true), nil
+}
+
+// fileInfo implements the fs.FileInfo interface.
 type fileInfo struct {
 	name    string
 	size    int64
 	mode    fs.FileMode
 	modTime time.Time
 	isDir   bool
-	sys     interface{}
+	sys     any
 }
 
 func (i *fileInfo) Name() string       { return i.name }
@@ -38,37 +64,43 @@ func (i *fileInfo) Size() int64        { return i.size }
 func (i *fileInfo) Mode() fs.FileMode  { return i.mode }
 func (i *fileInfo) ModTime() time.Time { return i.modTime }
 func (i *fileInfo) IsDir() bool        { return i.isDir }
-func (i *fileInfo) Sys() interface{}   { return i.sys }
+func (i *fileInfo) Sys() any           { return i.sys }
 
+// file implements the fs.File interface.
 type file struct {
-	reader *bytes.Reader
+	reader io.ReadCloser
 	info   fs.FileInfo
 }
 
-func (f *file) Stat() (fs.FileInfo, error)       { return f.info, nil }
-func (f *file) Read(p []byte) (n int, err error) { return f.reader.Read(p) }
-func (f *file) Close() error                     { return nil }
-func (f *file) ReadDir(n int) ([]fs.DirEntry, error) {
-	return nil, errors.New("directories not supported")
+func (f *file) Stat() (fs.FileInfo, error)           { return f.info, nil }
+func (f *file) Read(p []byte) (n int, err error)     { return f.reader.Read(p) }
+func (f *file) Close() error                         { return f.reader.Close() }
+func (f *file) ReadDir(_ int) ([]fs.DirEntry, error) { return nil, errFileReadDirUnsupported }
+
+func isPathError(err error) bool {
+	var e *fs.PathError
+	return errors.As(err, &e)
 }
 
-// open
-// Contrary to fs package, the downloading FS is mainly based on the ReadFile method.
-// The Open function is not used in the downloading FS but is supported and is calling ReadFile method.
-func open(f fs.FS, name string) (fs.File, error) {
-	content, err := fs.ReadFile(f, name)
-	if err != nil {
-		return nil, err
+var (
+	errFSProtoNilURI          = errors.New("fsutil.fsProto: nil URI")
+	errFileReadDirUnsupported = errors.New("fsutil.file: ReadDir not supported")
+)
+
+func validPath(operation, path string) error {
+	if !fs.ValidPath(path) {
+		return errInvalidPathFn(operation, path)
 	}
-	return &file{
-		reader: bytes.NewReader(content),
-		info: &fileInfo{
-			name:    name,
-			size:    int64(len(content)),
-			mode:    0,
-			modTime: time.Now(),
-			isDir:   false,
-			sys:     nil,
-		},
-	}, nil
+	return nil
+}
+
+func validPattern(operation, pattern string) error { //nolint:unparam
+	if _, err := path.Match(pattern, ""); err != nil {
+		return errInvalidPathFn(operation, pattern)
+	}
+	return nil
+}
+
+func errInvalidPathFn(operation string, path string) error {
+	return &fs.PathError{Op: operation, Path: path, Err: fs.ErrInvalid}
 }

@@ -22,8 +22,8 @@ import (
 	netURL "net/url"
 	"strings"
 
-	"github.com/chronicleprotocol/suite/pkg/util/errutil"
-	"github.com/chronicleprotocol/suite/pkg/util/sliceutil"
+	"github.com/chronicleprotocol/go-lib/errutil"
+	"github.com/chronicleprotocol/go-lib/sliceutil"
 )
 
 type ChainFSOption func(*chainFS)
