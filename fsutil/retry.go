@@ -25,7 +25,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/chronicleprotocol/suite/pkg/util/retry"
+	"github.com/chronicleprotocol/go-lib/retry"
 )
 
 // NewRetryProto creates a new retry protocol.

@@ -24,7 +24,7 @@ import (
 	netURL "net/url"
 	"strings"
 
-	"github.com/chronicleprotocol/suite/pkg/util/errutil"
+	"github.com/chronicleprotocol/go-lib/errutil"
 )
 
 const (
