@@ -34,7 +34,7 @@ func WithFileWorkingDir(wd string) FileOption {
 
 // NewFileProto creates a new file protocol that uses the local filesystem.
 // The URI scheme must be "file" and the host must be empty or "localhost".
-// The working directory is set to "/" by default.
+// The working directory is set to "." by default.
 func NewFileProto(opts ...FileOption) Protocol {
 	f := &fileProto{}
 	for _, opt := range opts {
